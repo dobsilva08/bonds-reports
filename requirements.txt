@@ -1,0 +1,12 @@
+requests
+pandas
+python-dateutil
+tqdm
+
+# Telegram sender
+python-telegram-bot==13.15
+
+# LLM Clients (para fallback local se desejar)
+openai
+groq
+deepseek
