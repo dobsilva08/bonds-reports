@@ -1,0 +1,78 @@
+name: Bonds — US10Y — Relatório Diário (PIAPI + Fallback)
+
+on:
+  schedule:
+    - cron: "5 10 * * *"   # 07:05 BRT (ajuste se quiser)
+  workflow_dispatch:
+    inputs:
+      preview:
+        type: boolean
+        default: false
+        description: "Enviar para TESTE"
+
+concurrency:
+  group: us10y-daily-llm
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    env:
+      # LLMs
+      PIAPI_API_KEY: ${{ secrets.PIAPI_API_KEY }}
+      PIAPI_MODEL: gpt-4o-mini
+
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_MODEL: llama-3.1-70b-versatile
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: gpt-4o-mini
+
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      DEEPSEEK_MODEL: deepseek-chat
+
+      # Dados
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+
+      # Telegram (um único canal para todos os bonds)
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      # Config LLM client
+      LLM_PROVIDER: piapi
+      LLM_FALLBACK_ORDER: piapi,groq,openai,deepseek
+
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install requests pandas python-dateutil
+          fi
+
+      - name: US10Y Diário (PREVIEW)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
+        run: |
+          mkdir -p pipelines/bonds
+          python scripts/bonds/us10y_daily.py --out pipelines/bonds/us10y_daily_preview.csv
+          python scripts/bonds/us10y_daily_llm.py --preview --send-telegram
+
+      - name: US10Y Diário
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+        run: |
+          mkdir -p pipelines/bonds
+          python scripts/bonds/us10y_daily.py --out pipelines/bonds/us10y_daily.csv
+          python scripts/bonds/us10y_daily_llm.py --send-telegram
