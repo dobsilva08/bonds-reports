@@ -21,16 +21,18 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 
 from providers.llm_client import LLMClient
-from scripts.gas.tools import title_counter, sent_guard, send_to_telegram
+from scripts.bonds.tools import title_counter, sent_guard, send_to_telegram
 from scripts.bonds.us30y_daily import fetch_us30y_from_fred
 
 BRT = timezone(timedelta(hours=-3))
+
 
 def today_brt_str() -> str:
     meses = ["janeiro","fevereiro","março","abril","maio","junho",
              "julho","agosto","setembro","outubro","novembro","dezembro"]
     now = datetime.now(BRT)
     return f"{now.day} de {meses[now.month-1]} de {now.year}"
+
 
 def build_context_block(series_id: str = "DGS30", start: str = "2000-01-01") -> str:
     api_key = os.getenv("FRED_API_KEY")
@@ -70,6 +72,7 @@ def build_context_block(series_id: str = "DGS30", start: str = "2000-01-01") -> 
     ])
     return "\n".join(lines)
 
+
 def gerar_analise_us30y(contexto_textual: str, provider_hint: Optional[str] = None) -> Dict[str, Any]:
     system_msg = "Você é um gestor sênior de renda fixa, escreva em PT-BR, objetivo, focado em juros longos e risco de prazo."
     user_msg = f"""
@@ -92,6 +95,7 @@ Baseie-se no contexto factual:
     llm = LLMClient(provider=provider_hint or None)
     texto = llm.generate(system_prompt=system_msg, user_prompt=user_msg, temperature=0.25, max_tokens=1200)
     return {"texto": texto, "provider": llm.active_provider}
+
 
 def main():
     parser = argparse.ArgumentParser(description="Relatório Diário — US30Y (DGS30)")
@@ -125,5 +129,7 @@ def main():
     if args.send_telegram:
         send_to_telegram(texto_final, preview=args.preview)
 
+
 if __name__ == "__main__":
     main()
+
