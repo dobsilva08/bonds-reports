@@ -7,6 +7,7 @@ Relatório Diário — US30Y (Treasury 30 anos)
 - Trava diária (.sent) e contador
 - Envio opcional ao Telegram
 """
+
 import os
 import sys
 
@@ -21,7 +22,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 
 from providers.llm_client import LLMClient
-from scripts.bonds.tools import title_counter, sent_guard, send_to_telegram
+from scripts.bonds.tools import title_counter, sent_guard, send_to_telegram, mark_sent
 from scripts.bonds.us30y_daily import fetch_us30y_from_fred
 
 BRT = timezone(timedelta(hours=-3))
@@ -43,6 +44,7 @@ def build_context_block(series_id: str = "DGS30", start: str = "2000-01-01") -> 
     last = df.iloc[-1]
     last_date = last["date"]
     last_yield = float(last["yield_pct"])
+
     if len(df) > 1:
         prev = df.iloc[-2]
         prev_date = prev["date"]
@@ -54,6 +56,7 @@ def build_context_block(series_id: str = "DGS30", start: str = "2000-01-01") -> 
         prev_yield = None
         delta = 0.0
         delta_bp = 0.0
+
     min_y = float(df["yield_pct"].min())
     max_y = float(df["yield_pct"].max())
     start_date = df["date"].min()
@@ -63,7 +66,9 @@ def build_context_block(series_id: str = "DGS30", start: str = "2000-01-01") -> 
         f"- US30Y (DGS30 FRED): {last_yield:.2f}% em {last_date}.",
     ]
     if prev_date is not None:
-        lines.append(f"- Leitura anterior: {prev_yield:.2f}% em {prev_date}. Variação diária: {delta:+.2f} pp ({delta_bp:+.1f} bps).")
+        lines.append(
+            f"- Leitura anterior: {prev_yield:.2f}% em {prev_date}. Variação diária: {delta:+.2f} pp ({delta_bp:+.1f} bps)."
+        )
     lines.extend([
         f"- Período observado: {start_date} → {end_date}.",
         f"- Faixa histórica: mínimo {min_y:.2f}%, máximo {max_y:.2f}%.",
@@ -97,6 +102,23 @@ Baseie-se no contexto factual:
     return {"texto": texto, "provider": llm.active_provider}
 
 
+def simple_fallback_summary(context_text: str) -> str:
+    header = "Resumo RÁPIDO — (fallback automático, LLM indisponível)"
+    lines = [
+        header,
+        "",
+        "Contexto factual:",
+        context_text,
+        "",
+        "Interpretação rápida:",
+        "- Leitura principal: veja o bloco de contexto acima.",
+        "- Observação: reveja suas chaves/configuração LLM para receber análise completa.",
+        "",
+        "Este relatório foi gerado automaticamente em modo fallback."
+    ]
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Relatório Diário — US30Y (DGS30)")
     parser.add_argument("--send-telegram", action="store_true")
@@ -110,6 +132,7 @@ def main():
     args = parser.parse_args()
 
     sent_path = args.sent_path or "data/sentinels/us30y_daily.sent"
+
     if not args.force and sent_guard(sent_path):
         print("Já foi enviado hoje (trava .sent). Use --force para ignorar.")
         return
@@ -118,18 +141,34 @@ def main():
     titulo = f"💵 US30Y — Relatório Diário — {today_brt_str()} — Nº {numero}"
 
     contexto = build_context_block(series_id=args.series_id, start=args.start)
-    t0 = time.time()
-    llm_out = gerar_analise_us30y(contexto_textual=contexto, provider_hint=args.provider)
-    dt = time.time() - t0
 
-    corpo = llm_out["texto"].strip()
-    provider_usado = llm_out.get("provider", "?")
-    texto_final = f"<b>{html.escape(titulo)}</b>\n\n{corpo}\n\n<i>Provedor LLM: {html.escape(str(provider_usado))} • {dt:.1f}s</i>"
+    t0 = time.time()
+    try:
+        llm_out = gerar_analise_us30y(contexto_textual=contexto, provider_hint=args.provider)
+        dt = time.time() - t0
+        corpo = llm_out["texto"].strip()
+        provider_usado = llm_out.get("provider", "?")
+
+        texto_final = f"<b>{html.escape(titulo)}</b>\n\n{corpo}\n\n<i>Provedor LLM: {html.escape(str(provider_usado))} • {dt:.1f}s</i>"
+
+    except Exception as e:
+        print("[LLM] falha ao gerar análise LLM:", e)
+        corpo_fb = simple_fallback_summary(contexto)
+        texto_final = f"<b>{html.escape(titulo)}</b>\n\n{html.escape(corpo_fb)}\n\n<i>Fallback gerado por ausência/erro do LLM • 0.0s</i>"
+
     print(texto_final)
+
     if args.send_telegram:
-        send_to_telegram(texto_final, preview=args.preview)
+        try:
+            resp = send_to_telegram(texto_final, preview=args.preview)
+            try:
+                mark_sent(sent_path)
+            except Exception as e_mark:
+                print("[mark_sent] aviso: não foi possível criar sentinel:", e_mark)
+        except Exception as e_send:
+            print("[Telegram] erro ao enviar mensagem:", e_send)
+            raise
 
 
 if __name__ == "__main__":
     main()
-
