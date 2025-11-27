@@ -24,10 +24,8 @@ def title_counter(counter_path: str = "data/counters.json", key: str = "default"
     Lê um arquivo JSON com contadores, incrementa o contador 'key' e salva.
     Retorna o número novo (int).
     """
-    # garante diretório
     _ensure_dir_for_file(counter_path)
 
-    # load or init
     if os.path.exists(counter_path):
         try:
             with open(counter_path, "r", encoding="utf-8") as f:
@@ -37,12 +35,10 @@ def title_counter(counter_path: str = "data/counters.json", key: str = "default"
     else:
         data = {}
 
-    # incremento
     current = int(data.get(key, 0))
     current += 1
     data[key] = current
 
-    # save
     try:
         with open(counter_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -56,11 +52,8 @@ def sent_guard(sent_path: str):
     """
     Verifica a existencia de um arquivo sentinel (.sent) que indica que já foi enviado hoje.
     Retorna True se o arquivo existir (ou seja: já enviado).
-    Não cria nem remove o arquivo — usar mark_sent() para marcar.
     """
-    if os.path.exists(sent_path):
-        return True
-    return False
+    return os.path.exists(sent_path)
 
 
 def mark_sent(sent_path: str):
@@ -82,9 +75,15 @@ def mark_sent(sent_path: str):
 def send_to_telegram(text: str, preview: bool = False, html_mode: bool = True):
     """
     Envia mensagem para Telegram.
-    - Usa TELEGRAM_BOT_TOKEN e, se preview=True usa TELEGRAM_CHAT_ID_TEST, senão TELEGRAM_CHAT_ID_BONDS (fallbacks possíveis).
-    - Se TELEGRAM_MESSAGE_THREAD_ID estiver definido, envia como thread (message_thread_id).
-    - Formato: HTML por padrão (parse_mode).
+    - Prioridade de escolha do chat_id:
+       1) TELEGRAM_CHAT_ID
+       2) se preview=True -> TELEGRAM_CHAT_ID_TEST
+       3) TELEGRAM_CHAT_ID_BONDS
+       4) TELEGRAM_CHAT_ID_TEST
+    - Se TELEGRAM_MESSAGE_THREAD_ID estiver definido, adiciona message_thread_id.
+    - Usa parse_mode HTML por padrão.
+    Retorna o JSON de resposta da API Telegram se sucesso.
+    Lança RuntimeError em caso de configuração inválida ou erro HTTP.
     """
     import requests
 
@@ -92,14 +91,31 @@ def send_to_telegram(text: str, preview: bool = False, html_mode: bool = True):
     if not bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN não configurado no ambiente.")
 
-    # escolha do chat
-    if preview:
-        chat_id = os.environ.get("TELEGRAM_CHAT_ID_TEST") or os.environ.get("TELEGRAM_CHAT_ID_BONDS")
+    # Preferência: TELEGRAM_CHAT_ID (único), depois as variações anteriores
+    env_chat_primary = os.environ.get("TELEGRAM_CHAT_ID")
+    env_chat_bonds = os.environ.get("TELEGRAM_CHAT_ID_BONDS")
+    env_chat_test = os.environ.get("TELEGRAM_CHAT_ID_TEST")
+
+    # Escolha do chat
+    chat_id = None
+    if env_chat_primary:
+        chat_id = env_chat_primary
     else:
-        chat_id = os.environ.get("TELEGRAM_CHAT_ID_BONDS") or os.environ.get("TELEGRAM_CHAT_ID_TEST")
+        # se preview foi pedido, dá prioridade ao CHAT_ID_TEST
+        if preview and env_chat_test:
+            chat_id = env_chat_test
+        # senão tenta CHAT_ID_BONDS
+        if not chat_id and env_chat_bonds:
+            chat_id = env_chat_bonds
+        # por fim tenta CHAT_ID_TEST (fallback)
+        if not chat_id and env_chat_test:
+            chat_id = env_chat_test
 
     if not chat_id:
-        raise RuntimeError("Nenhum TELEGRAM_CHAT_ID_* configurado (TELEGRAM_CHAT_ID_BONDS ou TELEGRAM_CHAT_ID_TEST).")
+        raise RuntimeError(
+            "Nenhum TELEGRAM_CHAT_ID configurado. "
+            "Defina TELEGRAM_CHAT_ID (recomendado) ou TELEGRAM_CHAT_ID_BONDS / TELEGRAM_CHAT_ID_TEST."
+        )
 
     thread_id = os.environ.get("TELEGRAM_MESSAGE_THREAD_ID")
 
@@ -112,24 +128,23 @@ def send_to_telegram(text: str, preview: bool = False, html_mode: bool = True):
     if html_mode:
         payload["parse_mode"] = "HTML"
     if thread_id:
-        # thread id must be integer
         try:
             payload["message_thread_id"] = int(thread_id)
         except Exception:
+            # se não for inteiro, ignora (não quebra)
             pass
 
     resp = requests.post(url, json=payload, timeout=30)
     try:
         resp.raise_for_status()
     except Exception as e:
-        # tenta log detalhado
+        # log detalhado e raise
         print("[send_to_telegram] ERRO ao enviar mensgem Telegram:", e)
         print("[send_to_telegram] status_code:", resp.status_code, "response:", resp.text)
-        raise
+        raise RuntimeError(f"Telegram API devolveu erro HTTP {resp.status_code}: {resp.text}")
 
     j = resp.json()
     if not j.get("ok"):
         raise RuntimeError(f"Telegram API devolveu erro: {j}")
 
-    # se sucesso, cria sentinel default? (não automaticamente aqui)
     return j
