@@ -11,6 +11,7 @@ Relatório Diário — US2Y (Treasury 2 anos)
 import os
 import sys
 
+# garante que o root do repo está no PYTHONPATH
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -22,25 +23,36 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 
 from providers.llm_client import LLMClient
-from scripts.bonds.tools import title_counter, sent_guard, send_to_telegram, mark_sent
-from scripts.bonds.us2y_daily import fetch_us2y_from_fred
+from scripts.tools import title_counter, sent_guard, send_to_telegram
+from scripts.bonds.us10y_daily import fetch_us10y_from_fred   # reutiliza função, nome não importa
 
 BRT = timezone(timedelta(hours=-3))
 
 
 def today_brt_str() -> str:
-    meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
-             "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+    meses = [
+        "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
+    ]
     now = datetime.now(BRT)
     return f"{now.day} de {meses[now.month-1]} de {now.year}"
 
 
 def build_context_block(series_id: str = "DGS2", start: str = "2000-01-01") -> str:
+    """
+    Busca US2Y via FRED e monta um bloco de contexto factual
+    (nível atual, variação, histórico) para o LLM.
+    """
     api_key = os.getenv("FRED_API_KEY")
     if not api_key:
         raise RuntimeError("FRED_API_KEY não configurado no ambiente.")
 
-    df = fetch_us2y_from_fred(api_key=api_key, series_id=series_id, observation_start=start)
+    df = fetch_us10y_from_fred(   # função reaproveitada
+        api_key=api_key,
+        series_id=series_id,
+        observation_start=start,
+    )
+
     df = df.sort_values("date").reset_index(drop=True)
     last = df.iloc[-1]
     last_date = last["date"]
@@ -66,74 +78,80 @@ def build_context_block(series_id: str = "DGS2", start: str = "2000-01-01") -> s
     lines = [
         f"- US2Y (DGS2 FRED): {last_yield:.2f}% em {last_date}.",
     ]
+
     if prev_date is not None:
         lines.append(
-            f"- Leitura anterior: {prev_yield:.2f}% em {prev_date}. Variação diária: {delta:+.2f} pp ({delta_bp:+.1f} bps)."
+            f"- Leitura anterior: {prev_yield:.2f}% em {prev_date}. "
+            f"Variação diária: {delta:+.2f} pp ({delta_bp:+.1f} bps)."
         )
-    lines.extend([
-        f"- Período observado: {start_date} → {end_date}.",
-        f"- Faixa histórica: mínimo {min_y:.2f}%, máximo {max_y:.2f}%.",
-        "- US2Y reflete expectativas de política monetária de curto prazo e é sensível ao forward guidance do Fed.",
-        "- Movimentos no US2Y afetam funding de curto prazo e a inclinação 2Y–10Y (sinal de ciclo).",
-    ])
+
+    lines.extend(
+        [
+            f"- Período observado na série: {start_date} → {end_date}.",
+            f"- Faixa histórica de yield: mínimo {min_y:.2f}%, máximo {max_y:.2f}%.",
+            "- US2Y é o vértice mais sensível à política monetária do Fed.",
+            "- Movimentos de 2 anos refletem expectativas para Fed Funds e juros terminais.",
+            "- A inclinação 2Y–10Y é referência clássica para inversão e sinalização de ciclo.",
+        ]
+    )
+
     return "\n".join(lines)
 
 
 def gerar_analise_us2y(contexto_textual: str, provider_hint: Optional[str] = None) -> Dict[str, Any]:
-    system_msg = "Você é um gestor sênior de renda fixa, escreva em PT-BR, objetivo, focado em juros curtos e política monetária."
-    user_msg = f"""
-Gere um **Relatório Diário — US2Y (Treasury 2 anos)** estruturado nos 10 tópicos abaixo.
-Numere exatamente de 1 a 10.
+    system_msg = (
+        "Você é um gestor sênior de renda fixa global, com foco em Treasuries dos EUA. "
+        "Escreva em PT-BR, claro, objetivo, com foco em política monetária, inflação implícita "
+        "e dinâmica da curva curta (2 anos)."
+    )
 
-1) Nível atual do US2Y e variação diária
-2) Movimentos relacionados à política monetária (Fed)
-3) Curva 2Y–10Y: inclinação e sinal do dia
-4) Impacto em funding / mercados de curto prazo
-5) Spreads de crédito curtos (curto prazo) — visão
-6) Fluxos e posicionamento (bancos, MMFs)
-7) Dados macro relevantes (inflation, payrolls)
-8) Risco e aversão a volatilidade
-9) Interpretação Executiva (bullet points)
-10) Conclusão (curto e médio prazo)
-Baseie-se no contexto factual:
+    user_msg = f"""
+Gere um **Relatório Diário — US2Y (Treasury 2 anos)** estruturado nos **10 tópicos abaixo**.
+Numere exatamente de 1 a 10, texto contínuo (sem markdown de lista do tipo '- ').
+
+1) Nível atual do US2Y e variação diária  
+2) Curva de juros EUA (2Y, 10Y, 30Y) — inclinação e movimento do dia  
+3) Inflação implícita e expectativas de política monetária (Fed, dot plot, próximos meetings)  
+4) Reprecificação de duration curta (sensibilidade a Fed Funds)  
+5) Spreads de crédito e impacto em IG/HY  
+6) Risco global e fluxo para risco vs refúgio  
+7) Contexto macro recente (inflação, emprego, atividade)  
+8) Visão institucional sobre trajetória da curva curta  
+9) Interpretação Executiva (bullet points, até 5 linhas)  
+10) Conclusão (1 parágrafo: curto e médio prazo para US2Y e curva de Treasuries)  
+
+Baseie-se no contexto factual levantado:
 {contexto_textual}
 """.strip()
+
     llm = LLMClient(provider=provider_hint or None)
-    texto = llm.generate(system_prompt=system_msg, user_prompt=user_msg, temperature=0.25, max_tokens=1200)
+    texto = llm.generate(
+        system_prompt=system_msg,
+        user_prompt=user_msg,
+        temperature=0.35,
+        max_tokens=1600,
+    )
     return {"texto": texto, "provider": llm.active_provider}
 
 
-def simple_fallback_summary(context_text: str) -> str:
-    header = "Resumo RÁPIDO — (fallback automático, LLM indisponível)"
-    lines = [
-        header,
-        "",
-        "Contexto factual:",
-        context_text,
-        "",
-        "Interpretação rápida:",
-        "- Leitura principal: veja o bloco de contexto acima.",
-        "- Observação: reveja suas chaves/configuração LLM para receber análise completa.",
-        "",
-        "Este relatório foi gerado automaticamente em modo fallback."
-    ]
-    return "\n".join(lines)
-
-
 def main():
-    parser = argparse.ArgumentParser(description="Relatório Diário — US2Y (DGS2)")
+    parser = argparse.ArgumentParser(description="Relatório Diário — US2Y (Treasury 2 anos)")
     parser.add_argument("--send-telegram", action="store_true")
     parser.add_argument("--preview", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--counter-path", default="data/counters.json")
     parser.add_argument("--sent-path", default=None)
     parser.add_argument("--provider", default=None)
-    parser.add_argument("--series-id", default=os.environ.get("US2Y_FRED_SERIES_ID", "DGS2"))
+    parser.add_argument(
+        "--series-id",
+        default=os.environ.get("US2Y_FRED_SERIES_ID", "DGS2"),
+    )
     parser.add_argument("--start", default="2000-01-01")
     args = parser.parse_args()
 
     sent_path = args.sent_path or "data/sentinels/us2y_daily.sent"
 
+    # trava diária
     if not args.force and sent_guard(sent_path):
         print("Já foi enviado hoje (trava .sent). Use --force para ignorar.")
         return
@@ -144,31 +162,22 @@ def main():
     contexto = build_context_block(series_id=args.series_id, start=args.start)
 
     t0 = time.time()
-    try:
-        llm_out = gerar_analise_us2y(contexto_textual=contexto, provider_hint=args.provider)
-        dt = time.time() - t0
-        corpo = llm_out["texto"].strip()
-        provider_usado = llm_out.get("provider", "?")
+    llm_out = gerar_analise_us2y(contexto_textual=contexto, provider_hint=args.provider)
+    dt = time.time() - t0
 
-        texto_final = f"<b>{html.escape(titulo)}</b>\n\n{corpo}\n\n<i>Provedor LLM: {html.escape(str(provider_usado))} • {dt:.1f}s</i>"
+    corpo = llm_out["texto"].strip()
+    provider_usado = llm_out.get("provider", "?")
 
-    except Exception as e:
-        print("[LLM] falha ao gerar análise LLM:", e)
-        corpo_fb = simple_fallback_summary(contexto)
-        texto_final = f"<b>{html.escape(titulo)}</b>\n\n{html.escape(corpo_fb)}\n\n<i>Fallback gerado por ausência/erro do LLM • 0.0s</i>"
+    texto_final = (
+        f"<b>{html.escape(titulo)}</b>\n\n"
+        f"{corpo}\n\n"
+        f"<i>Provedor LLM: {html.escape(str(provider_usado))} • {dt:.1f}s</i>"
+    )
 
     print(texto_final)
 
     if args.send_telegram:
-        try:
-            resp = send_to_telegram(texto_final, preview=args.preview)
-            try:
-                mark_sent(sent_path)
-            except Exception as e_mark:
-                print("[mark_sent] aviso: não foi possível criar sentinel:", e_mark)
-        except Exception as e_send:
-            print("[Telegram] erro ao enviar mensagem:", e_send)
-            raise
+        send_to_telegram(texto_final, preview=args.preview)
 
 
 if __name__ == "__main__":
