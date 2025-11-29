@@ -1,4 +1,4 @@
-name: Bonds — US10Y & US2Y — Relatório Diário (PIAPI + Fallback)
+name: Bonds — US10Y & US2Y & US30Y — Relatório Diário (PIAPI + Fallback)
 
 on:
   schedule:
@@ -48,6 +48,7 @@ jobs:
       # (opcional) variáveis de série padrão
       US10Y_FRED_SERIES_ID: DGS10
       US2Y_FRED_SERIES_ID: DGS2
+      US30Y_FRED_SERIES_ID: DGS30
 
     steps:
       - name: Checkout
@@ -70,6 +71,9 @@ jobs:
       - name: Preparar pastas
         run: mkdir -p pipelines/bonds data/sentinels
 
+      ################################
+      # PREVIEW (workflow_dispatch)
+      ################################
       - name: US10Y Diário (PREVIEW)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
         run: |
@@ -79,14 +83,28 @@ jobs:
       - name: US2Y Diário (PREVIEW)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
         run: |
-          # opção A: se você criou scripts/bonds/us2y_daily.py e us2y_daily_llm.py
+          # opção A: scripts específicos
           python scripts/bonds/us2y_daily.py --out pipelines/bonds/us2y_daily_preview.csv
           python scripts/bonds/us2y_daily_llm.py --preview --send-telegram
 
-          # opção B (alternativa, se NÃO quiser criar novos arquivos):
+          # opção B (alternativa, sem scripts novos):
           # python scripts/bonds/us10y_daily.py --out pipelines/bonds/us2y_daily_preview.csv --series-id DGS2
           # python scripts/bonds/us10y_daily_llm.py --preview --send-telegram --series-id DGS2 --counter-path data/counters.json
 
+      - name: US30Y Diário (PREVIEW)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
+        run: |
+          # opção A: scripts específicos (recomendado)
+          python scripts/bonds/us30y_daily.py --out pipelines/bonds/us30y_daily_preview.csv
+          python scripts/bonds/us30y_daily_llm.py --preview --send-telegram
+
+          # opção B (alternativa, sem scripts novos):
+          # python scripts/bonds/us10y_daily.py --out pipelines/bonds/us30y_daily_preview.csv --series-id DGS30
+          # python scripts/bonds/us10y_daily_llm.py --preview --send-telegram --series-id DGS30 --counter-path data/counters.json
+
+      ################################
+      # PRODUÇÃO / SCHEDULE
+      ################################
       - name: US10Y Diário
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
         run: |
@@ -96,10 +114,21 @@ jobs:
       - name: US2Y Diário
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
         run: |
-          # opção A: se você criou scripts/bonds/us2y_daily.py e us2y_daily_llm.py
+          # opção A: scripts específicos
           python scripts/bonds/us2y_daily.py --out pipelines/bonds/us2y_daily.csv
           python scripts/bonds/us2y_daily_llm.py --send-telegram
 
-          # opção B (alternativa, se NÃO quiser criar novos arquivos):
+          # opção B (alternativa, sem scripts novos):
           # python scripts/bonds/us10y_daily.py --out pipelines/bonds/us2y_daily.csv --series-id DGS2
           # python scripts/bonds/us10y_daily_llm.py --send-telegram --series-id DGS2 --counter-path data/counters.json
+
+      - name: US30Y Diário
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+        run: |
+          # opção A: scripts específicos (recomendado)
+          python scripts/bonds/us30y_daily.py --out pipelines/bonds/us30y_daily.csv
+          python scripts/bonds/us30y_daily_llm.py --send-telegram
+
+          # opção B (alternativa, sem scripts novos):
+          # python scripts/bonds/us10y_daily.py --out pipelines/bonds/us30y_daily.csv --series-id DGS30
+          # python scripts/bonds/us10y_daily_llm.py --send-telegram --series-id DGS30 --counter-path data/counters.json
