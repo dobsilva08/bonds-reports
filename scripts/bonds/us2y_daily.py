@@ -97,4 +97,19 @@ def main():
     df = fetch_us2y_from_fred(
         api_key=api_key,
         series_id=args.series_id,
-        observation
+        observation_start=args.start,
+    )
+
+    out_path = os.path.abspath(args.out)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    df.to_csv(out_path, index=False)
+    print(f"[US2Y] CSV salvo em {out_path}")
+    if len(df) > 0:
+        print(f"[US2Y] Linhas: {len(df)} — Período {df['date'].min()} → {df['date'].max()}")
+    else:
+        print("[US2Y] Sem dados retornados.")
+    
+
+if __name__ == "__main__":
+    main()
