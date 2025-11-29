@@ -10,3 +10,6 @@ python-telegram-bot==13.15
 openai
 groq
 deepseek
+
+# Para gerar gráficos (necessário para plot_yields_separate.py)
+matplotlib
