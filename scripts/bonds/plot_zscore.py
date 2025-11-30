@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Plota Z-Score de cada vértice (rolling mean/std).
-- Entrada: CSVs com yield_pct.
-- Saída: pipelines/bonds/zscore_{window}d.png
+Opções:
+  --window   janela (default 252)
+  --last-12m filtra últimos 12 meses e ajusta saída para *_12m.png
 """
 import argparse
 import os
+from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -30,6 +32,7 @@ def main():
     p.add_argument("--out", default=None)
     p.add_argument("--start", default=None)
     p.add_argument("--end", default=None)
+    p.add_argument("--last-12m", action="store_true", help="Filtrar últimos 12 meses e ajustar saída")
     args = p.parse_args()
 
     dfs, names = [], []
@@ -51,6 +54,12 @@ def main():
     if args.end:
         merged = merged[merged["date"] <= pd.to_datetime(args.end)]
 
+    if args.last_12m:
+        cutoff = datetime.utcnow().date() - timedelta(days=365)
+        merged = merged[merged["date"] >= pd.to_datetime(cutoff)]
+        if args.out and args.out.endswith(".png"):
+            args.out = args.out.replace(".png", "_12m.png")
+
     cols = [c for c in merged.columns if c != "date"]
     for c in cols:
         rolling_mean = merged[c].rolling(window=args.window, min_periods=1).mean()
@@ -59,7 +68,6 @@ def main():
 
     zcols = [c for c in merged.columns if c.endswith("_z")]
 
-    # plot subplots
     n = len(zcols)
     fig, axes = plt.subplots(nrows=n, ncols=1, figsize=(12, 3.5*n), sharex=True)
     if n == 1: axes = [axes]
@@ -76,6 +84,8 @@ def main():
     axes[-1].set_xlabel("Data")
 
     out = args.out or f"pipelines/bonds/zscore_{args.window}d.png"
+    if args.last_12m and out.endswith(".png"):
+        out = out.replace(".png", "_12m.png")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     plt.tight_layout()
     plt.savefig(out, dpi=150)
