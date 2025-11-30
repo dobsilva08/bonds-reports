@@ -1,0 +1,144 @@
+name: Bonds — Gráficos Diários 2v (2Y / 10Y / 30Y + Heatmaps + GIF + 3D)
+
+on:
+  schedule:
+    - cron: "5 10 * * *"   # 07:05 BRT
+  workflow_dispatch:
+    inputs:
+      preview:
+        type: boolean
+        default: false
+        description: "Rodar PREVIEW (usa arquivos *_preview.csv se disponíveis)"
+
+jobs:
+  graphs:
+    runs-on: ubuntu-latest
+
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install matplotlib numpy imageio imageio-ffmpeg
+
+      - name: Preparar pastas
+        run: mkdir -p pipelines/bonds
+
+      #########################################
+      # BAIXAR DADOS
+      #########################################
+
+      - name: Baixar US2Y
+        run: |
+          python scripts/bonds/us2y_daily.py --out pipelines/bonds/us2y_daily.csv
+
+      - name: Baixar US10Y
+        run: |
+          python scripts/bonds/us10y_daily.py --out pipelines/bonds/us10y_daily.csv
+
+      - name: Baixar US30Y
+        run: |
+          python scripts/bonds/us30y_daily.py --out pipelines/bonds/us30y_daily.csv
+
+      #########################################
+      # GERAR GRÁFICOS
+      #########################################
+
+      - name: Gerar gráficos
+        run: |
+          set -euo pipefail
+
+          # FULL yields
+          python scripts/bonds/plot_yields_separate.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 20 \
+            --out pipelines/bonds/yields_separate.png
+
+          # 12 meses yields
+          python scripts/bonds/plot_yields_12m.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 20 \
+            --out pipelines/bonds/yields_12m.png
+
+          # Spreads FULL
+          python scripts/bonds/plot_spreads.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 20 --ema \
+            --out pipelines/bonds/spreads.png
+
+          # Spreads 12 meses
+          python scripts/bonds/plot_spreads_12m.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 20 --ema \
+            --out pipelines/bonds/spreads_12m.png
+
+          # Heatmap avançado
+          python scripts/bonds/plot_curve_heatmap_advanced.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --monthly \
+            --out pipelines/bonds/curve_heatmap_advanced.png \
+            --fred-api-key "${FRED_API_KEY}"
+
+          # Heatmap compacto (backup)
+          python scripts/bonds/plot_curve_heatmap.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --out pipelines/bonds/curve_heatmap.png
+
+          # 🔥 NOVO — Heatmap 10 anos (Alta legibilidade)
+          python scripts/bonds/plot_curve_heatmap_10y.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --out pipelines/bonds/curve_heatmap_10y.png
+
+          # GIF animado
+          python scripts/bonds/plot_curve_animation.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --out pipelines/bonds/curve_anim.gif \
+            --fps 8
+
+          # 3D Surface
+          python scripts/bonds/plot_curve_surface.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --out pipelines/bonds/curve_surface.png
+
+      #########################################
+      # ENVIAR PARA O TELEGRAM (PNG + GIF)
+      #########################################
+
+      - name: Enviar gráficos
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          echo "Enviando PNGs..."
+          for FILE in pipelines/bonds/*.png; do
+            echo "PNG: $FILE"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F photo=@"${FILE}" \
+                -F caption="Gráfico — $(basename "$FILE")"
+          done
+
+          echo "Enviando GIFs..."
+          for FILE in pipelines/bonds/*.gif; do
+            echo "GIF: $FILE"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAnimation" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F animation=@"${FILE}" \
+                -F caption="Animação — $(basename "$FILE")"
+          done
