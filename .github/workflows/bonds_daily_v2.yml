@@ -1,17 +1,17 @@
-name: Bonds — US10Y & US2Y & US30Y — Relatório Diário  + Gráficos 12M (PIAPI + Fallback)
+name: Bonds Full — Relatório Diário + Gráficos FULL + 12M
 
 on:
   schedule:
-    - cron: "5 09 * * Thu"# 06:05 BRT quinta-feira
+    - cron: "5 10 * * *"   # 07:05 BRT
   workflow_dispatch:
     inputs:
       preview:
         type: boolean
         default: false
-        description: "Enviar para TESTE"
+        description: "Executar em modo PREVIEW (teste)"
 
 concurrency:
-  group: bonds-daily-llm
+  group: bonds-daily
   cancel-in-progress: false
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
 
       PYTHONPATH: ${{ github.workspace }}
 
-      # séries padrão
+      # Séries padrão
       US10Y_FRED_SERIES_ID: DGS10
       US2Y_FRED_SERIES_ID: DGS2
       US30Y_FRED_SERIES_ID: DGS30
@@ -64,120 +64,141 @@ jobs:
       - name: Preparar pastas
         run: mkdir -p pipelines/bonds data/sentinels
 
-      ################################
-      # PREVIEW
-      ################################
-
-      - name: US10Y Diário (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
+      ###########################################
+      # PREVIEW MODE
+      ###########################################
+      - name: Run data scripts (PREVIEW)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview }}
         run: |
           python scripts/bonds/us10y_daily.py --out pipelines/bonds/us10y_daily_preview.csv
-          python scripts/bonds/us10y_daily_llm.py --preview --send-telegram || true
-
-      - name: US2Y Diário (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
-        run: |
-          python scripts/bonds/us2y_daily.py --out pipelines/bonds/us2y_daily_preview.csv
-          python scripts/bonds/us2y_daily_llm.py --preview --send-telegram || true
-
-      - name: US30Y Diário (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
-        run: |
+          python scripts/bonds/us2y_daily.py  --out pipelines/bonds/us2y_daily_preview.csv
           python scripts/bonds/us30y_daily.py --out pipelines/bonds/us30y_daily_preview.csv
-          python scripts/bonds/us30y_daily_llm.py --preview --send-telegram || true
 
-      # --- PLOT FULL ---
-      - name: Plot (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
+      - name: Generate plots FULL + 12M (PREVIEW)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview }}
         run: |
+          # FULL versions
           python scripts/bonds/plot_yields_separate.py \
             --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
-            --window 20 \
-            --out pipelines/bonds/yields_separate_preview.png
+            --out pipelines/bonds/yields_full_preview.png
 
-      # --- PLOT 12 MESES ---
-      - name: Plot 12M (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
-        run: |
-          python scripts/bonds/plot_yields_12m.py \
+          python scripts/bonds/plot_spreads.py \
             --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
-            --window 20 \
-            --out pipelines/bonds/yields_12m_preview.png
+            --out pipelines/bonds/spreads_preview.png
 
-      # --- ENVIAR GRÁFICOS ---
-      - name: Enviar gráfico FULL (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
+          python scripts/bonds/plot_volatility.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --window 30 --annualize --out pipelines/bonds/volatility_30d_preview.png
+
+          python scripts/bonds/plot_zscore.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --window 252 --out pipelines/bonds/zscore_252d_preview.png
+
+          python scripts/bonds/plot_butterfly.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --out pipelines/bonds/butterfly_preview.png
+
+          # 12M versions (same scripts + flag)
+          python scripts/bonds/plot_yields_separate.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --last-12m --out pipelines/bonds/yields_full_preview.png
+
+          python scripts/bonds/plot_spreads.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --last-12m --out pipelines/bonds/spreads_preview.png
+
+          python scripts/bonds/plot_volatility.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --window 30 --annualize --last-12m --out pipelines/bonds/volatility_30d_preview.png
+
+          python scripts/bonds/plot_zscore.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --window 252 --last-12m --out pipelines/bonds/zscore_252d_preview.png
+
+          python scripts/bonds/plot_butterfly.py \
+            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
+            --last-12m --out pipelines/bonds/butterfly_preview.png
+
+      - name: Send all preview plots to Telegram
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview }}
         run: |
-          FILE=pipelines/bonds/yields_separate_preview.png
-          [ -f "$FILE" ] && curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-            -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F photo=@"${FILE}" \
-            -F caption="Preview — Yield (2Y/10Y/30Y) — FULL"
+          for f in pipelines/bonds/*_preview.png; do
+            [ -f "$f" ] || continue
+            echo "Sending $f"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
+              -F chat_id="${TELEGRAM_CHAT_ID}" \
+              -F photo=@"${f}" \
+              -F caption="PREVIEW — $(basename $f)"
+          done
 
-      - name: Enviar gráfico 12M (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
-        run: |
-          FILE=pipelines/bonds/yields_12m_preview.png
-          [ -f "$FILE" ] && curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-            -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F photo=@"${FILE}" \
-            -F caption="Preview — Yield (2Y/10Y/30Y) — 12 Meses"
-
-      ################################
-      # PRODUÇÃO (SCHEDULE)
-      ################################
-
-      - name: US10Y Diário
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+      ###########################################
+      # PRODUCTION / SCHEDULE
+      ###########################################
+      - name: Run data + LLM (PROD)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.preview }}
         run: |
           python scripts/bonds/us10y_daily.py --out pipelines/bonds/us10y_daily.csv
-          python scripts/bonds/us10y_daily_llm.py --send-telegram || true
-
-      - name: US2Y Diário
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
-        run: |
-          python scripts/bonds/us2y_daily.py --out pipelines/bonds/us2y_daily.csv
-          python scripts/bonds/us2y_daily_llm.py --send-telegram || true
-
-      - name: US30Y Diário
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
-        run: |
+          python scripts/bonds/us2y_daily.py  --out pipelines/bonds/us2y_daily.csv
           python scripts/bonds/us30y_daily.py --out pipelines/bonds/us30y_daily.csv
+
+          # LLM reports (if configured); ignore failures to avoid breaking plot delivery
+          python scripts/bonds/us10y_daily_llm.py --send-telegram || true
+          python scripts/bonds/us2y_daily_llm.py  --send-telegram || true
           python scripts/bonds/us30y_daily_llm.py --send-telegram || true
 
-      # --- PLOT FULL ---
-      - name: Plot (PROD)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+      - name: Generate plots FULL + 12M (PROD)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.preview }}
         run: |
+          # FULL versions
           python scripts/bonds/plot_yields_separate.py \
             --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
-            --window 20 \
-            --out pipelines/bonds/yields_separate.png
+            --out pipelines/bonds/yields_full.png
 
-      # --- PLOT 12 MESES ---
-      - name: Plot 12M (PROD)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
-        run: |
-          python scripts/bonds/plot_yields_12m.py \
+          python scripts/bonds/plot_spreads.py \
             --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
-            --window 20 \
-            --out pipelines/bonds/yields_12m.png
+            --out pipelines/bonds/spreads.png
 
-      # --- ENVIAR GRÁFICOS ---
-      - name: Enviar gráfico FULL (PROD)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
-        run: |
-          FILE=pipelines/bonds/yields_separate.png
-          [ -f "$FILE" ] && curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-            -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F photo=@"${FILE}" \
-            -F caption="Yield (2Y/10Y/30Y) — FULL ✔"
+          python scripts/bonds/plot_volatility.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 30 --annualize --out pipelines/bonds/volatility_30d.png
 
-      - name: Enviar gráfico 12M (PROD)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+          python scripts/bonds/plot_zscore.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 252 --out pipelines/bonds/zscore_252d.png
+
+          python scripts/bonds/plot_butterfly.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --out pipelines/bonds/butterfly.png
+
+          # 12M versions (same scripts + flag)
+          python scripts/bonds/plot_yields_separate.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --last-12m --out pipelines/bonds/yields_full.png
+
+          python scripts/bonds/plot_spreads.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --last-12m --out pipelines/bonds/spreads.png
+
+          python scripts/bonds/plot_volatility.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 30 --annualize --last-12m --out pipelines/bonds/volatility_30d.png
+
+          python scripts/bonds/plot_zscore.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 252 --last-12m --out pipelines/bonds/zscore_252d.png
+
+          python scripts/bonds/plot_butterfly.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --last-12m --out pipelines/bonds/butterfly.png
+
+      - name: Send all production plots to Telegram
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.preview }}
         run: |
-          FILE=pipelines/bonds/yields_12m.png
-          [ -f "$FILE" ] && curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-            -F chat_id="${TELEGRAM_CHAT_ID}" \
-            -F photo=@"${FILE}" \
-            -F caption="Yield (2Y/10Y/30Y) — Últimos 12 Meses ✔"
+          for f in pipelines/bonds/*.png; do
+            [ -f "$f" ] || continue
+            echo "Sending $f"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
+              -F chat_id="${TELEGRAM_CHAT_ID}" \
+              -F photo=@"${f}" \
+              -F caption="📊 $(basename $f)"
+          done
