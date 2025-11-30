@@ -2,12 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 Plota volatilidade realizada (rolling std) das yields.
-- Calcula std dos delta diários (em bps) e opcionalmente anualiza (sqrt(252)).
-- Entrada: 3 CSVs (us2y, us10y, us30y) ou qualquer conjunto contendo col 'yield_pct'.
-- Saída PNG: pipelines/bonds/volatility_{window}d.png
+- Delta diário em bps (ppt * 100)
+- Opções:
+  --window N   janela (default 30)
+  --annualize  anualiza multiplicando por sqrt(252)
+  --last-12m   mostra apenas últimos 12 meses e ajusta saída para *_12m.png
 """
 import argparse
 import os
+from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
 from math import sqrt
@@ -16,7 +19,6 @@ def read_series(path):
     df = pd.read_csv(path, parse_dates=["date"])
     if "yield_pct" not in df.columns:
         raise RuntimeError(f"{path} must contain 'yield_pct'")
-    # infer name
     name = None
     if "source" in df.columns and df["source"].notnull().any():
         s = df.loc[df["source"].first_valid_index(), "source"]
@@ -26,6 +28,11 @@ def read_series(path):
     df = df[["date", "yield_pct"]].rename(columns={"yield_pct": name}).sort_values("date").reset_index(drop=True)
     return df, name
 
+def ensure_out_name(out: str, last12: bool) -> str:
+    if last12 and out.endswith(".png"):
+        return out.replace(".png", "_12m.png")
+    return out
+
 def main():
     p = argparse.ArgumentParser(description="Volatilidade realizada de yields (rolling std dos delta em bps)")
     p.add_argument("--files", nargs="+", required=True, help="CSV(s) de entrada (date,yield_pct,source)")
@@ -34,6 +41,7 @@ def main():
     p.add_argument("--out", default=None, help="PNG de saída (opcional)")
     p.add_argument("--start", default=None)
     p.add_argument("--end", default=None)
+    p.add_argument("--last-12m", action="store_true", help="Filtrar últimos 12 meses e ajustar nome do arquivo")
     args = p.parse_args()
 
     dfs, names = [], []
@@ -56,7 +64,13 @@ def main():
     if args.end:
         merged = merged[merged["date"] <= pd.to_datetime(args.end)]
 
-    # calc daily changes in bps (ppt * 100)
+    if args.last_12m:
+        cutoff = datetime.utcnow().date() - timedelta(days=365)
+        merged = merged[merged["date"] >= pd.to_datetime(cutoff)]
+        if args.out:
+            args.out = ensure_out_name(args.out, True)
+
+    # calc daily changes in bps
     for col in [c for c in merged.columns if c != "date"]:
         merged[f"{col}_delta_bps"] = merged[col].diff() * 100.0
 
@@ -69,7 +83,6 @@ def main():
 
     vol_cols = [c for c in merged.columns if c.endswith("_vol")]
 
-    # plot
     n = len(vol_cols)
     fig, axes = plt.subplots(nrows=n, ncols=1, figsize=(12, 3.5*n), sharex=True)
     if n == 1: axes = [axes]
@@ -77,11 +90,13 @@ def main():
         ax = axes[i]
         label = vc.replace("_vol","")
         ax.plot(merged["date"], merged[vc], label=f"Vol {label} (window={args.window}d){' annualized' if args.annualize else ''}")
-        ax.set_ylabel("bps" if not args.annualize else "bps (ann.)")
+        ax.set_ylabel("bps" + (" (ann.)" if args.annualize else ""))
         ax.grid(True)
         ax.legend(loc="upper left")
     axes[-1].set_xlabel("Data")
     out = args.out or f"pipelines/bonds/volatility_{args.window}d.png"
+    if args.last_12m and out.endswith(".png"):
+        out = out.replace(".png", "_12m.png")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     plt.tight_layout()
     plt.savefig(out, dpi=150)
