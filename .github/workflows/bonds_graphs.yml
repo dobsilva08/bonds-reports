@@ -73,16 +73,22 @@ jobs:
             --ema \
             --out pipelines/bonds/spreads.png
 
+          python scripts/bonds/plot_spreads_12m.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --window 20 \
+            --ema \
+            --out pipelines/bonds/spreads_12m.png
+
       #########################################
-      # ENVIAR GRÁFICOS (robusto)
+      # ENVIAR GRÁFICOS — CORRIGIDO
       #########################################
 
       - name: Enviar gráficos
         shell: bash
         run: |
           set -euo pipefail
-          echo "Procurando PNGs em pipelines/bonds/"
-          # habilita nullglob para que a expansão retorne array vazio quando não há matches
+          echo "Procurando PNGs em pipelines/bonds/ ..."
+          
           shopt -s nullglob
           FILES=(pipelines/bonds/*.png)
 
@@ -95,13 +101,10 @@ jobs:
             if [ -f "$FILE" ]; then
               CAPTION="Gráfico — $(basename "$FILE")"
               echo "Enviando $FILE ..."
-              # post via Telegram
               curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
                 -F chat_id="${TELEGRAM_CHAT_ID}" \
                 -F photo=@"${FILE}" \
-                -F caption="$CAPTION" || echo "Aviso: falha ao enviar $FILE"
-              echo "OK: $FILE"
-            else
-              echo "Ignorando $FILE (não é arquivo regular)"
+                -F caption="$CAPTION" || echo "Falha ao enviar $FILE"
+              echo "OK enviado: $FILE"
             fi
           done
