@@ -2,7 +2,7 @@ name: Bonds — Relatório semanal  + TODOS os Gráficos (2Y,10Y,30Y)
 
 on:
   schedule:
-    - cron: "5 10 * * *"   # 07:05 BRT
+   - cron: "5 9 * * Thu"  # 07:05 BRT
   workflow_dispatch:
     inputs:
       preview:
