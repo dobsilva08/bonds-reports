@@ -2,7 +2,7 @@ name: Bonds Full — Relatório Diário + Gráficos FULL + 12M
 
 on:
   schedule:
-    - cron: "5 10 * * *"   # 07:05 BRT
+   - cron: "0 10 * * Thu"
   workflow_dispatch:
     inputs:
       preview:
