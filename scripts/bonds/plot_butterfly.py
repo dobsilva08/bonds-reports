@@ -3,11 +3,13 @@
 """
 Plota butterfly da curva:
 BUTTERFLY = US30Y - 2*US10Y + US2Y
-- Entrada: cs vs
-- Saída: pipelines/bonds/butterfly.png
+Opções:
+  --window   janela para MA
+  --last-12m filtra últimos 12 meses e ajusta saída para *_12m.png
 """
 import argparse
 import os
+from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -31,6 +33,7 @@ def main():
     p.add_argument("--out", default="pipelines/bonds/butterfly.png")
     p.add_argument("--start", default=None)
     p.add_argument("--end", default=None)
+    p.add_argument("--last-12m", action="store_true", help="Filtrar últimos 12 meses e ajustar saída")
     args = p.parse_args()
 
     dfs, cols = [], []
@@ -49,7 +52,12 @@ def main():
     if args.end:
         merged = merged[merged["date"] <= pd.to_datetime(args.end)]
 
-    # try mapping heuristics
+    if args.last_12m:
+        cutoff = datetime.utcnow().date() - timedelta(days=365)
+        merged = merged[merged["date"] >= pd.to_datetime(cutoff)]
+        if args.out.endswith(".png"):
+            args.out = args.out.replace(".png", "_12m.png")
+
     def pick(keys):
         for k in keys:
             for c in merged.columns:
@@ -61,7 +69,6 @@ def main():
     c30 = pick(["dgs30","30y","30"])
     cols_found = [c for c in [c2,c10,c30] if c]
     if len(cols_found) < 3:
-        # fallback to order given
         cols_list = [c for c in merged.columns if c!="date"]
         if len(cols_list) >= 3:
             c2, c10, c30 = cols_list[0], cols_list[1], cols_list[2]
