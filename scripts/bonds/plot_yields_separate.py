@@ -3,36 +3,26 @@
 """
 Plota gráficos separados (um por ativo) para US2Y, US10Y e US30Y.
 
-Cada subplot contém:
- - série diária de yield
- - média móvel (SMA por padrão; use --ema para EMA)
+Opções:
+  --last-12m : filtra apenas os últimos 12 meses (altera saída para *_12m.png)
+  --ema       : usa EMA em vez de SMA para a média móvel
+  --window    : janela da média móvel (default 20)
 
-Uso exemplo:
+Exemplo:
   python scripts/bonds/plot_yields_separate.py \
     --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
-    --window 20 \
-    --out pipelines/bonds/yields_separate.png
-
-Argumentos:
-  --files : 3 CSVs (ordem livre, mas recomendo 2Y 10Y 30Y)
-  --window: janela (dias) para média móvel (default: 20)
-  --ema    : usar EMA em vez de SMA (opcional)
-  --out   : caminho do PNG de saída (default: pipelines/bonds/yields_separate.png)
-  --start : (opcional) data inicial YYYY-MM-DD
-  --end   : (opcional) data final YYYY-MM-DD
+    --window 20 --out pipelines/bonds/yields_separate.png
 """
-
 import argparse
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def read_series(path: str) -> (pd.DataFrame, str):
+def read_series(path: str):
     df = pd.read_csv(path, parse_dates=["date"])
     if "yield_pct" not in df.columns:
         raise RuntimeError(f"Arquivo {path} não contém coluna 'yield_pct'.")
-    # tenta inferir nome da série pela coluna source ou nome do arquivo
     name = None
     if "source" in df.columns and df["source"].notnull().any():
         src = df.loc[df["source"].first_valid_index(), "source"]
@@ -42,8 +32,7 @@ def read_series(path: str) -> (pd.DataFrame, str):
             name = str(src)
     if not name:
         name = os.path.splitext(os.path.basename(path))[0]
-    df = df[["date", "yield_pct"]].copy()
-    df = df.sort_values("date").reset_index(drop=True)
+    df = df[["date", "yield_pct"]].copy().sort_values("date").reset_index(drop=True)
     df.rename(columns={"yield_pct": name}, inplace=True)
     return df, name
 
@@ -51,6 +40,11 @@ def moving_average(series: pd.Series, window: int, ema: bool) -> pd.Series:
     if ema:
         return series.ewm(span=window, adjust=False, min_periods=1).mean()
     return series.rolling(window=window, min_periods=1).mean()
+
+def ensure_out_name(out: str, last12: bool) -> str:
+    if last12 and out.endswith(".png"):
+        return out.replace(".png", "_12m.png")
+    return out
 
 def main():
     parser = argparse.ArgumentParser(description="Plota gráficos separados para yields (2Y,10Y,30Y).")
@@ -60,9 +54,9 @@ def main():
     parser.add_argument("--out", default="pipelines/bonds/yields_separate.png", help="PNG de saída")
     parser.add_argument("--start", default=None, help="Data inicial filter YYYY-MM-DD")
     parser.add_argument("--end", default=None, help="Data final filter YYYY-MM-DD")
+    parser.add_argument("--last-12m", action="store_true", help="Filtra apenas últimos 12 meses e ajusta nome do arquivo")
     args = parser.parse_args()
 
-    # lê séries (aceita menos de 3 arquivos, mas avisa)
     series_list = []
     names = []
     for path in args.files:
@@ -76,7 +70,6 @@ def main():
     if not series_list:
         raise RuntimeError("Nenhum arquivo válido fornecido. Saindo.")
 
-    # merge por data para alinhamento (outer)
     merged = series_list[0]
     for df in series_list[1:]:
         merged = pd.merge(merged, df, on="date", how="outer")
@@ -90,33 +83,34 @@ def main():
         end_dt = pd.to_datetime(args.end)
         merged = merged[merged["date"] <= end_dt]
 
+    if args.last_12m:
+        cutoff = datetime.utcnow().date() - timedelta(days=365)
+        merged = merged[merged["date"] >= pd.to_datetime(cutoff)]
+        args.out = ensure_out_name(args.out, True)
+
     if merged.empty:
         raise RuntimeError("Nenhum dado após aplicar filtros de data.")
 
-    # prepara plot: um subplot por série (ordem de names)
-    n = len(names)
+    # prepara plot
+    cols = [c for c in merged.columns if c != "date"]
+    n = len(cols)
     figsize = (12, 4 * n)
     fig, axes = plt.subplots(nrows=n, ncols=1, figsize=figsize, sharex=True)
     if n == 1:
-        axes = [axes]  # garante lista
+        axes = [axes]
 
-    for idx, name in enumerate(names):
+    for idx, col in enumerate(cols):
         ax = axes[idx]
-        # pode haver NaN para alguma data; extrai série
-        series = merged[["date", name]].copy()
-        series = series.dropna(subset=[name])
+        series = merged[["date", col]].copy().dropna()
         if series.empty:
-            print(f"Warning: série {name} está vazia após filtro — pulando plot.")
+            print(f"Warning: série {col} está vazia após filtro — pulando.")
             continue
 
-        # plot da série (não especificamos cores)
-        ax.plot(series["date"], series[name], label=f"{name} (yield)")
+        ax.plot(series["date"], series[col], label=f"{col} (yield)")
+        ma = moving_average(merged[col], args.window, args.ema)
+        ax.plot(merged["date"], ma, linestyle="--", label=f"{col} MA{args.window}{' EMA' if args.ema else ''}")
 
-        # média móvel (aplicada à série alinhada)
-        ma = moving_average(merged[name], args.window, args.ema)
-        ax.plot(merged["date"], ma, linestyle="--", label=f"{name} MA{args.window}{' EMA' if args.ema else ''}")
-
-        ax.set_title(f"{name} — Yield e Média Móvel (window={args.window})")
+        ax.set_title(f"{col} — Yield e Média Móvel (window={args.window})")
         ax.set_ylabel("Yield (%)")
         ax.grid(True)
         ax.legend(loc="upper left")
@@ -131,7 +125,7 @@ def main():
 
     print(f"Gráfico salvo em: {out_path}")
     print("Período plotado:", merged["date"].min().date(), "→", merged["date"].max().date())
-    print("Séries plotadas:", names)
+    print("Séries plotadas:", cols)
 
 if __name__ == "__main__":
     main()
