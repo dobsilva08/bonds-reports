@@ -2,7 +2,7 @@ name: Bonds — US10Y & US2Y & US30Y — Relatório Diário  + Gráficos 12M (PI
 
 on:
   schedule:
-    - cron: "5 10 * * *"   # 07:05 BRT
+    - cron: "5 09 * * Thu"# 06:05 BRT quinta-feira
   workflow_dispatch:
     inputs:
       preview:
