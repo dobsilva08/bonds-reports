@@ -2,13 +2,13 @@ name: Bonds — Gráficos Diários (2Y / 10Y / 30Y)
 
 on:
   schedule:
-    - cron: "5 10 * * *"     # 07:05 BRT
+    - cron: "5 9 * * *"   # 07:05 BRT
   workflow_dispatch:
     inputs:
       preview:
         type: boolean
         default: false
-        description: "Rodar em modo PREVIEW (envia gráficos de preview)"
+        description: "Rodar PREVIEW"
 
 jobs:
   graphs:
@@ -17,13 +17,14 @@ jobs:
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
       PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python 
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -38,45 +39,23 @@ jobs:
         run: mkdir -p pipelines/bonds
 
       #########################################
-      # PREVIEW
+      # BAIXAR DADOS (PRODUÇÃO / PREVIEW)
       #########################################
-      - name: Gerar gráficos (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
-        run: |
-          python scripts/bonds/plot_yields_separate.py \
-            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
-            --window 20 \
-            --out pipelines/bonds/yields_separate_preview.png
 
-          python scripts/bonds/plot_yields_12m.py \
-            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
-            --window 20 \
-            --out pipelines/bonds/yields_12m_preview.png
+      - name: Baixar US2Y
+        run: python scripts/bonds/us2y_daily.py --out pipelines/bonds/us2y_daily.csv
 
-          python scripts/bonds/plot_spreads.py \
-            --files pipelines/bonds/us2y_daily_preview.csv pipelines/bonds/us10y_daily_preview.csv pipelines/bonds/us30y_daily_preview.csv \
-            --window 20 \
-            --ema \
-            --out pipelines/bonds/spreads_preview.png
+      - name: Baixar US10Y
+        run: python scripts/bonds/us10y_daily.py --out pipelines/bonds/us10y_daily.csv
 
-      - name: Enviar gráficos (PREVIEW)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.preview == true }}
-        run: |
-          for FILE in pipelines/bonds/*_preview.png; do
-            if [ -f "$FILE" ]; then
-              CAPTION="Preview — $(basename "$FILE")"
-              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-                -F chat_id="${TELEGRAM_CHAT_ID}" \
-                -F photo=@"${FILE}" \
-                -F caption="$CAPTION"
-            fi
-          done
+      - name: Baixar US30Y
+        run: python scripts/bonds/us30y_daily.py --out pipelines/bonds/us30y_daily.csv
 
       #########################################
-      # PRODUÇÃO
+      # GERAR GRÁFICOS
       #########################################
-      - name: Gerar gráficos (PRODUÇÃO)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+
+      - name: Gerar gráficos
         run: |
           python scripts/bonds/plot_yields_separate.py \
             --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
@@ -94,15 +73,13 @@ jobs:
             --ema \
             --out pipelines/bonds/spreads.png
 
-      - name: Enviar gráficos (PRODUÇÃO)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+      #########################################
+      # ENVIAR GRÁFICOS
+      #########################################
+
+      - name: Enviar gráficos
         run: |
           for FILE in pipelines/bonds/*.png; do
-            if [[ "$FILE" != *preview* ]]; then
-              CAPTION="$(basename "$FILE") — Gráfico Diário"
-              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-                -F chat_id="${TELEGRAM_CHAT_ID}" \
-                -F photo=@"${FILE}" \
-                -F caption="$CAPTION"
-            fi
-          done
+            CAPTION="Gráfico — $(basename "$FILE")"
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
+              -F chat_id="${TELEGRAM_CHAT_ID}" \
