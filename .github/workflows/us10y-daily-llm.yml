@@ -2,7 +2,7 @@ name: Bonds — US10Y & US2Y & US30Y — Relatório Diário (PIAPI + Fallback)
 
 on:
   schedule:
-    - cron: "5 10 * * *"   # 07:05 BRT (ajuste se quiser)
+    - cron: "0 10 * * Sun,Mon,Tue,Wed,Fri,Sat"   # 07:05 BRT (ajuste se quiser)
   workflow_dispatch:
     inputs:
       preview:
