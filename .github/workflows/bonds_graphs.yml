@@ -1,4 +1,4 @@
-name: Bonds — Gráficos Diários (2Y / 10Y / 30Y)
+name: Bonds — Gráficos Diários (2Y / 10Y / 30Y + Heatmap)
 
 on:
   schedule:
@@ -33,7 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install matplotlib
+          pip install matplotlib numpy
 
       - name: Preparar pastas
         run: mkdir -p pipelines/bonds
@@ -52,35 +52,45 @@ jobs:
         run: python scripts/bonds/us30y_daily.py --out pipelines/bonds/us30y_daily.csv
 
       #########################################
-      # GERAR GRÁFICOS
+      # GERAR GRÁFICOS (FULL, 12M, SPREADS, HEATMAP)
       #########################################
 
       - name: Gerar gráficos
         run: |
+          # FULL series (subplots separados)
           python scripts/bonds/plot_yields_separate.py \
             --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
             --window 20 \
             --out pipelines/bonds/yields_separate.png
 
+          # Últimos 12 meses (yields)
           python scripts/bonds/plot_yields_12m.py \
             --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
             --window 20 \
             --out pipelines/bonds/yields_12m.png
 
+          # Spreads FULL (toda a série)
           python scripts/bonds/plot_spreads.py \
             --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
             --window 20 \
             --ema \
             --out pipelines/bonds/spreads.png
 
+          # Spreads últimos 12 meses
           python scripts/bonds/plot_spreads_12m.py \
             --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
             --window 20 \
             --ema \
             --out pipelines/bonds/spreads_12m.png
 
+          # Heatmap da curva (2Y->30Y) - agregação mensal por padrão
+          python scripts/bonds/plot_curve_heatmap.py \
+            --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv \
+            --monthly \
+            --out pipelines/bonds/curve_heatmap.png
+
       #########################################
-      # ENVIAR GRÁFICOS — CORRIGIDO
+      # ENVIAR GRÁFICOS (robusto)
       #########################################
 
       - name: Enviar gráficos
@@ -88,7 +98,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "Procurando PNGs em pipelines/bonds/ ..."
-          
           shopt -s nullglob
           FILES=(pipelines/bonds/*.png)
 
@@ -104,7 +113,7 @@ jobs:
               curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
                 -F chat_id="${TELEGRAM_CHAT_ID}" \
                 -F photo=@"${FILE}" \
-                -F caption="$CAPTION" || echo "Falha ao enviar $FILE"
+                -F caption="$CAPTION" || echo "Aviso: falha ao enviar $FILE"
               echo "OK enviado: $FILE"
             fi
           done
