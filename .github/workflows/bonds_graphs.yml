@@ -2,7 +2,7 @@ name: Bonds — Gráficos Diários (2Y / 10Y / 30Y)
 
 on:
   schedule:
-    - cron: "5 9 * * *"   # 07:05 BRT
+    - cron: "5 10 * * *"   # 07:05 BRT
   workflow_dispatch:
     inputs:
       preview:
@@ -74,12 +74,34 @@ jobs:
             --out pipelines/bonds/spreads.png
 
       #########################################
-      # ENVIAR GRÁFICOS
+      # ENVIAR GRÁFICOS (robusto)
       #########################################
 
       - name: Enviar gráficos
+        shell: bash
         run: |
-          for FILE in pipelines/bonds/*.png; do
-            CAPTION="Gráfico — $(basename "$FILE")"
-            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
-              -F chat_id="${TELEGRAM_CHAT_ID}" \
+          set -euo pipefail
+          echo "Procurando PNGs em pipelines/bonds/"
+          # habilita nullglob para que a expansão retorne array vazio quando não há matches
+          shopt -s nullglob
+          FILES=(pipelines/bonds/*.png)
+
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "Nenhum PNG encontrado — nada a enviar."
+            exit 0
+          fi
+
+          for FILE in "${FILES[@]}"; do
+            if [ -f "$FILE" ]; then
+              CAPTION="Gráfico — $(basename "$FILE")"
+              echo "Enviando $FILE ..."
+              # post via Telegram
+              curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
+                -F chat_id="${TELEGRAM_CHAT_ID}" \
+                -F photo=@"${FILE}" \
+                -F caption="$CAPTION" || echo "Aviso: falha ao enviar $FILE"
+              echo "OK: $FILE"
+            else
+              echo "Ignorando $FILE (não é arquivo regular)"
+            fi
+          done
