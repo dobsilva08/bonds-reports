@@ -11,5 +11,12 @@ openai
 groq
 deepseek
 
-# Para gerar gráficos (necessário para plot_yields_separate.py)
+# Plots / ciência de dados
 matplotlib
+numpy
+imageio
+imageio-ffmpeg
+
+# opcional (se usar fetch de recessões via FRED)
+# requests já está listado acima, mas deixo aqui comentado como referência
+# requests
