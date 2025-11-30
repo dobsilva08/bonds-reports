@@ -1,4 +1,4 @@
-name: Bonds — US10Y & US2Y & US30Y — Relatório Diário + Gráficos (PIAPI + Fallback)
+name: Bonds — US10Y & US2Y & US30Y — Relatório Diário  + Gráficos 12M (PIAPI + Fallback)
 
 on:
   schedule:
