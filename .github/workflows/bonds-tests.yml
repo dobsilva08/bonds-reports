@@ -29,7 +29,7 @@ jobs:
           import pandas as pd
           dates = pd.date_range("2024-01-01", periods=300, freq="B")
           for code, base in [("DGS2", 4.0), ("DGS10", 4.2), ("DGS30", 4.5)]:
-              pd.DataFrame({"date": dates, "yield_pct": [base + i*0.001 for i in range(len(dates))], "source": [f"FRED:{code}"]}).to_csv(f"pipelines/bonds/{code.lower()}.csv", index=False)
+              pd.DataFrame({"date": dates, "yield_pct": [base + i*0.001 for i in range(len(dates))], "source": [f"FRED:{code}"] * len(dates)}).to_csv(f"pipelines/bonds/{code.lower()}.csv", index=False)
           PY
           FILES="pipelines/bonds/dgs2.csv pipelines/bonds/dgs10.csv pipelines/bonds/dgs30.csv"
           python scripts/bonds/plot_yields_separate.py --files $FILES --out pipelines/bonds/smoke_yields.png
