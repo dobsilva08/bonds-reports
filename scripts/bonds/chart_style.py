@@ -21,7 +21,8 @@ def apply_style():
         "font.family": "DejaVu Sans", "font.size": 10,
         "axes.titleweight": "bold", "axes.titlesize": 13,
         "legend.facecolor": PANEL, "legend.edgecolor": GRID,
-        "savefig.facecolor": NAVY,
+        "savefig.facecolor": NAVY, "axes.grid": True,
+        "axes.prop_cycle": plt.cycler(color=[BLUE, GOLD, GREEN, PURPLE, RED]),
     })
 
 def finish(ax):
