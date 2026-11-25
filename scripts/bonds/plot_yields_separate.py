@@ -18,6 +18,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
+from scripts.bonds.chart_style import apply_style, finish
 
 def read_series(path: str):
     df = pd.read_csv(path, parse_dates=["date"])
@@ -47,6 +48,7 @@ def ensure_out_name(out: str, last12: bool) -> str:
     return out
 
 def main():
+    apply_style()
     parser = argparse.ArgumentParser(description="Plota gráficos separados para yields (2Y,10Y,30Y).")
     parser.add_argument("--files", nargs="+", required=True, help="CSV(s) de entrada (date,yield_pct,source). Recomendo 3 arquivos (2Y,10Y,30Y).")
     parser.add_argument("--window", type=int, default=20, help="janela para média móvel (dias)")
@@ -112,7 +114,7 @@ def main():
 
         ax.set_title(f"{col} — Yield e Média Móvel (window={args.window})")
         ax.set_ylabel("Yield (%)")
-        ax.grid(True)
+        finish(ax)
         ax.legend(loc="upper left")
 
     axes[-1].set_xlabel("Data")
