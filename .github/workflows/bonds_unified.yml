@@ -1,0 +1,69 @@
+name: Bonds Unified Pipeline
+
+on:
+  schedule:
+    - cron: "5 10 * * *" # 07:05 BRT
+  workflow_dispatch:
+    inputs:
+      preview:
+        description: "Run without Telegram delivery"
+        type: boolean
+        default: false
+
+concurrency:
+  group: bonds-unified
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Validate configuration
+        run: |
+          test -n "$FRED_API_KEY"
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ inputs.preview }}" != "true" ]; then
+            test -n "$TELEGRAM_BOT_TOKEN"
+            test -n "$TELEGRAM_CHAT_ID"
+          fi
+      - name: Collect, validate and calculate
+        run: python -m scripts.bonds.pipeline
+      - name: Generate charts
+        run: |
+          mkdir -p pipelines/bonds
+          python scripts/bonds/plot_yields_separate.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/yields.png
+          python scripts/bonds/plot_spreads.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/spreads.png
+          python scripts/bonds/plot_volatility.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --window 30 --annualize --out pipelines/bonds/volatility.png
+          python scripts/bonds/plot_zscore.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --window 252 --out pipelines/bonds/zscore.png
+          python scripts/bonds/plot_butterfly.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/butterfly.png
+      - name: Send charts (production only)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+        run: |
+          python - <<'PY'
+          import os
+          from scripts.bonds.telegram_delivery import send_photo
+          files=["yields.png","spreads.png","volatility.png","zscore.png","butterfly.png"]
+          for name in files:
+              path="pipelines/bonds/"+name
+              send_photo(path, caption="Treasury Bonds | "+name)
+          PY
+      - name: Upload generated artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bonds-report-charts
+          path: pipelines/bonds/*.png
+          if-no-files-found: error
+          retention-days: 7
