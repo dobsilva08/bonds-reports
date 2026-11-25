@@ -14,7 +14,7 @@ def macro_context(metrics):
     if d2>0.5 and d10>0.5 and d30>0.5: move="alta generalizada dos yields"
     elif d2<-0.5 and d10<-0.5 and d30<-0.5: move="queda generalizada dos yields"
     elif d10>d2+0.5: move="movimento de steepening na parte 2Y–10Y (10Y subiu mais que 2Y)"
-    elif d10<d2-0.5: move="movimento de flattening na parte 2Y–10Y (10Y caiu menos ou subiu menos que 2Y)"
+    elif d10<d2-0.5: move="movimento de flattening na parte 2Y–10Y (o yield de 10Y teve variação inferior à do 2Y; se ambos caíram, o 10Y caiu mais; se ambos subiram, o 10Y subiu menos)"
     else: move="movimento relativamente misto/contido nos vértices 2Y e 10Y"
     vol_label="alta" if vol>=20 else "elevada" if vol>=12 else "moderada/baixa"
     butterfly_desc="curvatura positiva: 10Y está relativamente abaixo da interpolação simples entre 2Y e 30Y" if fly>0 else "curvatura negativa: 10Y está relativamente acima da interpolação simples entre 2Y e 30Y" if fly<0 else "curvatura neutra"
