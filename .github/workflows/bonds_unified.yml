@@ -54,6 +54,37 @@ jobs:
           test -s pipelines/bonds/volatility.png
           test -s pipelines/bonds/zscore.png
           test -s pipelines/bonds/butterfly.png
+      - name: Detect Telegram group migration automatically
+        if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
+        run: |
+          python - <<'PY'
+          import os, requests
+          token=os.environ["TELEGRAM_BOT_TOKEN"]
+          url=f"https://api.telegram.org/bot{token}/getUpdates"
+          try:
+              r=requests.get(url,timeout=20)
+              data=r.json()
+              if not data.get("ok"):
+                  print("Telegram getUpdates unavailable; retaining configured chat ID.")
+                  raise SystemExit(0)
+              migrated=None
+              for update in reversed(data.get("result",[])):
+                  msg=update.get("message") or update.get("edited_message") or update.get("channel_post") or {}
+                  if msg.get("migrate_to_chat_id"):
+                      migrated=str(msg["migrate_to_chat_id"])
+                      break
+                  if msg.get("migrate_from_chat_id") and msg.get("chat",{}).get("type")=="supergroup":
+                      migrated=str(msg["chat"]["id"])
+                      break
+              if migrated:
+                  with open(os.environ["GITHUB_ENV"],"a") as f:
+                      f.write("TELEGRAM_CHAT_ID="+migrated+"\\n")
+                  print("Detected Telegram migration update; using migrated destination for this run.")
+              else:
+                  print("No migration update found; retaining configured chat ID.")
+          except Exception as e:
+              print("Migration detection unavailable:",type(e).__name__)
+          PY
       - name: Send charts and executive snapshot
         if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
         run: |
