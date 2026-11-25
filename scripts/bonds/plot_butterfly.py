@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
+from scripts.bonds.chart_style import apply_style, finish
 
 def read_series(path):
     df = pd.read_csv(path, parse_dates=["date"])
@@ -27,6 +28,7 @@ def read_series(path):
     return df, name
 
 def main():
+    apply_style()
     p = argparse.ArgumentParser(description="Plot butterfly = 30Y - 2*10Y + 2Y")
     p.add_argument("--files", nargs=3, required=True, help="CSV: us2y us10y us30y (any order)")
     p.add_argument("--window", type=int, default=20, help="MA window for smoothing")
@@ -89,7 +91,7 @@ def main():
     ax.plot(merged["date"], merged["BUTTER_MA"], linestyle="--", label=f"MA{args.window}")
     ax.axhline(0, linestyle=":", linewidth=0.8)
     ax.set_ylabel("pp")
-    ax.grid(True)
+    finish(ax)
     ax.legend(loc="upper left")
     ax.set_title("Curve Butterfly = 30Y - 2×10Y + 2Y")
 
