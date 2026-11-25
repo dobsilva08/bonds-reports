@@ -8,7 +8,7 @@ on:
       preview:
         description: "Run pipeline without sending Telegram"
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: bonds-unified
@@ -54,51 +54,12 @@ jobs:
           test -s pipelines/bonds/volatility.png
           test -s pipelines/bonds/zscore.png
           test -s pipelines/bonds/butterfly.png
-      - name: Diagnose Telegram destination and migration
+      - name: Telegram preflight (migration-aware)
         if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
         run: |
           python - <<'PY'
-          import os, requests
-          token=os.environ["TELEGRAM_BOT_TOKEN"]
-          base=f"https://api.telegram.org/bot{token}"
-          chat=os.environ.get("TELEGRAM_CHAT_ID","").strip()
-          info=requests.get(base+"/getWebhookInfo",timeout=20).json()
-          webhook=(info.get("result") or {}).get("url","")
-          if webhook:
-              print("Bot webhook is active; getUpdates migration detection cannot be used.")
-          else:
-              updates=requests.get(base+"/getUpdates",timeout=20).json()
-              migrated=None
-              if updates.get("ok"):
-                  for update in reversed(updates.get("result",[])):
-                      msg=update.get("message") or update.get("edited_message") or update.get("channel_post") or {}
-                      if msg.get("migrate_to_chat_id"):
-                          migrated=str(msg["migrate_to_chat_id"]); break
-                      if msg.get("migrate_from_chat_id") and msg.get("chat",{}).get("type")=="supergroup":
-                          migrated=str(msg["chat"]["id"]); break
-              if migrated:
-                  chat=migrated
-                  with open(os.environ["GITHUB_ENV"],"a") as f:
-                      f.write("TELEGRAM_CHAT_ID="+chat+"\n")
-                  print("Migration event detected; temporary destination updated for this run.")
-              else:
-                  print("No migration event available.")
-          if not chat:
-              raise SystemExit("Telegram chat ID missing.")
-          print("Configured Telegram destination present (ID masked).")
-          PY
-      - name: Telegram preflight message
-        if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
-        run: |
-          python - <<'PY'
-          import os,requests
-          token=os.environ["TELEGRAM_BOT_TOKEN"]; chat=os.environ["TELEGRAM_CHAT_ID"]
-          r=requests.post(f"https://api.telegram.org/bot{token}/sendMessage",json={"chat_id":chat,"text":"<b>Bonds Reports</b> — validação de entrega iniciada.","parse_mode":"HTML"},timeout=30)
-          try: body=r.json()
-          except Exception: raise SystemExit(f"Telegram preflight invalid response HTTP {r.status_code}")
-          if not r.ok or not body.get("ok"):
-              detail=body.get("description","API error") if isinstance(body,dict) else "API error"
-              raise SystemExit(f"Telegram preflight failed HTTP {r.status_code}: {detail}")
+          from scripts.bonds.telegram_delivery import send_message
+          send_message("<b>Bonds Reports</b> — validação de entrega iniciada.")
           print("Telegram preflight delivery confirmed.")
           PY
       - name: Send charts and executive snapshot
