@@ -48,12 +48,14 @@ jobs:
           python scripts/bonds/plot_spreads.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/spreads.png
           python scripts/bonds/plot_volatility.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --window 30 --annualize --out pipelines/bonds/volatility.png
           python scripts/bonds/plot_zscore.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --window 252 --out pipelines/bonds/zscore.png
-          python scripts/bonds/plot_butterfly.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/butterfly.png\n          python scripts/bonds/plot_curve_comparison.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/curve_comparison.png
+          python scripts/bonds/plot_butterfly.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/butterfly.png
+          python scripts/bonds/plot_curve_comparison.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/curve_comparison.png
           test -s pipelines/bonds/yields.png
           test -s pipelines/bonds/spreads.png
           test -s pipelines/bonds/volatility.png
           test -s pipelines/bonds/zscore.png
-          test -s pipelines/bonds/butterfly.png\n          test -s pipelines/bonds/curve_comparison.png
+          test -s pipelines/bonds/butterfly.png
+          test -s pipelines/bonds/curve_comparison.png
       - name: Telegram preflight (migration-aware)
         if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
         run: |
