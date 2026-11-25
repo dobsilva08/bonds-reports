@@ -59,6 +59,8 @@ jobs:
           for name in files:
               path="pipelines/bonds/"+name
               send_photo(path, caption="Treasury Bonds | "+name)
+          from scripts.bonds.telegram_delivery import send_message
+          send_message(open("pipelines/bonds/executive.txt",encoding="utf-8").read())
           PY
       - name: Upload generated artifacts
         uses: actions/upload-artifact@v4
