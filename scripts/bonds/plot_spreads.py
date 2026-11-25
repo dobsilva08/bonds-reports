@@ -11,6 +11,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
+from scripts.bonds.chart_style import apply_style, finish
 
 def read_series(path):
     df = pd.read_csv(path, parse_dates=["date"])
@@ -37,6 +38,7 @@ def ensure_out_name(out: str, last12: bool) -> str:
     return out
 
 def main():
+    apply_style()
     parser = argparse.ArgumentParser(description="Plot spreads (2y-10y etc.) and signal inversions")
     parser.add_argument("--files", nargs=3, required=True, help="3 CSVs: us2y, us10y, us30y (any order)")
     parser.add_argument("--window", type=int, default=20, help="rolling window for smoothing")
@@ -135,7 +137,7 @@ def main():
         ax.axhline(0, linewidth=0.6, linestyle=":", alpha=0.8)
         ax.set_ylabel("pp")
         ax.legend(loc="upper left")
-        ax.grid(True)
+        finish(ax)
 
     axes[-1].set_xlabel("Data")
     plt.suptitle("Spreads da Curva — áreas sombreadas = spread < 0")
