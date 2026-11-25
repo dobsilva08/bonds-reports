@@ -12,7 +12,10 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
-from scripts.bonds.chart_style import apply_style, finish
+try:
+    from scripts.bonds.chart_style import apply_style, finish
+except ModuleNotFoundError:
+    from chart_style import apply_style, finish
 
 def read_series(path):
     df = pd.read_csv(path, parse_dates=["date"])
