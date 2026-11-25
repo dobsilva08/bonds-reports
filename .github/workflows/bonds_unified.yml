@@ -2,13 +2,13 @@ name: Bonds Unified Pipeline
 
 on:
   schedule:
-    - cron: "5 10 * * *" # 07:05 BRT
+    - cron: "5 10 * * *"
   workflow_dispatch:
     inputs:
       preview:
-        description: "Run without Telegram delivery"
+        description: "Run pipeline without sending Telegram"
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: bonds-unified
@@ -35,7 +35,7 @@ jobs:
       - name: Validate configuration
         run: |
           test -n "$FRED_API_KEY"
-          if [ "${{ github.event_name }}" != "workflow_dispatch" ] || [ "${{ inputs.preview }}" != "true" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.preview }}" != "true" ]; then
             test -n "$TELEGRAM_BOT_TOKEN"
             test -n "$TELEGRAM_CHAT_ID"
           fi
@@ -49,17 +49,19 @@ jobs:
           python scripts/bonds/plot_volatility.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --window 30 --annualize --out pipelines/bonds/volatility.png
           python scripts/bonds/plot_zscore.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --window 252 --out pipelines/bonds/zscore.png
           python scripts/bonds/plot_butterfly.py --files pipelines/bonds/us2y_daily.csv pipelines/bonds/us10y_daily.csv pipelines/bonds/us30y_daily.csv --out pipelines/bonds/butterfly.png
-      - name: Send charts (production only)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.preview != true }}
+          test -s pipelines/bonds/yields.png
+          test -s pipelines/bonds/spreads.png
+          test -s pipelines/bonds/volatility.png
+          test -s pipelines/bonds/zscore.png
+          test -s pipelines/bonds/butterfly.png
+      - name: Send charts and executive snapshot
+        if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
         run: |
           python - <<'PY'
-          import os
-          from scripts.bonds.telegram_delivery import send_photo
+          from scripts.bonds.telegram_delivery import send_photo, send_message
           files=["yields.png","spreads.png","volatility.png","zscore.png","butterfly.png"]
           for name in files:
-              path="pipelines/bonds/"+name
-              send_photo(path, caption="Treasury Bonds | "+name)
-          from scripts.bonds.telegram_delivery import send_message
+              send_photo("pipelines/bonds/"+name, caption="Treasury Bonds | "+name)
           send_message(open("pipelines/bonds/executive.txt",encoding="utf-8").read())
           PY
       - name: Upload generated artifacts
