@@ -18,5 +18,27 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install pandas requests matplotlib
+      - name: Compile project scripts
+        run: python -m compileall -q scripts tests
       - name: Run offline tests
         run: python -m unittest discover -s tests -v
+      - name: Smoke test chart CLIs using synthetic data
+        run: |
+          mkdir -p pipelines/bonds
+          python - <<'PY'
+          import pandas as pd
+          dates = pd.date_range("2024-01-01", periods=300, freq="B")
+          for code, base in [("DGS2", 4.0), ("DGS10", 4.2), ("DGS30", 4.5)]:
+              pd.DataFrame({"date": dates, "yield_pct": [base + i*0.001 for i in range(len(dates))], "source": [f"FRED:{code}"]}).to_csv(f"pipelines/bonds/{code.lower()}.csv", index=False)
+          PY
+          FILES="pipelines/bonds/dgs2.csv pipelines/bonds/dgs10.csv pipelines/bonds/dgs30.csv"
+          python scripts/bonds/plot_yields_separate.py --files $FILES --out pipelines/bonds/smoke_yields.png
+          python scripts/bonds/plot_spreads.py --files $FILES --out pipelines/bonds/smoke_spreads.png
+          python scripts/bonds/plot_volatility.py --files $FILES --window 30 --annualize --out pipelines/bonds/smoke_volatility.png
+          python scripts/bonds/plot_zscore.py --files $FILES --window 252 --out pipelines/bonds/smoke_zscore.png
+          python scripts/bonds/plot_butterfly.py --files $FILES --out pipelines/bonds/smoke_butterfly.png
+          test -s pipelines/bonds/smoke_yields.png
+          test -s pipelines/bonds/smoke_spreads.png
+          test -s pipelines/bonds/smoke_volatility.png
+          test -s pipelines/bonds/smoke_zscore.png
+          test -s pipelines/bonds/smoke_butterfly.png
