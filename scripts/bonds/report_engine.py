@@ -1,4 +1,4 @@
-"""Professional, factual Treasury report builder with optional guarded LLM narrative."""
+"""Executive Telegram report builder."""
 from scripts.bonds.macro_engine import macro_context
 
 def _change(v):
@@ -7,39 +7,31 @@ def _change(v):
 
 def build_daily_report(metrics):
     latest=metrics.iloc[-1]
-    prior=metrics.iloc[-2] if len(metrics)>1 else latest
     data_date=str(latest["date"])[:10]
     lines=[
       "<b>🇺🇸 US TREASURY &amp; MACRO INTELLIGENCE</b>",
       "<i>Daily Fixed Income Market Monitor</i>",
-      f"<b>Market close / observation:</b> {data_date}",
+      f"<b>Data de referência:</b> {data_date}",
       "",
-      "<b>1 | MARKET OVERVIEW</b>",
+      "<b>1 | MARKET SNAPSHOT</b>",
       f"• 2Y: <b>{latest['US2Y']:.3f}%</b> ({_change(latest.get('US2Y_daily_bps'))})",
       f"• 10Y: <b>{latest['US10Y']:.3f}%</b> ({_change(latest.get('US10Y_daily_bps'))})",
       f"• 30Y: <b>{latest['US30Y']:.3f}%</b> ({_change(latest.get('US30Y_daily_bps'))})",
       "",
-      "<b>2 | CURVE STRUCTURE</b>",
+      "<b>2 | CURVE &amp; SPREADS</b>",
       f"• 10Y–2Y: <b>{latest['10Y-2Y']:+.3f} pp</b>",
       f"• 30Y–10Y: <b>{latest['30Y-10Y']:+.3f} pp</b>",
       f"• 30Y–2Y: <b>{latest['30Y-2Y']:+.3f} pp</b>",
-      f"• Butterfly (30Y−2×10Y+2Y): <b>{latest['butterfly']:+.3f} pp</b>",
+      f"• Butterfly: <b>{latest['butterfly']:+.3f} pp</b>",
       "",
       "<b>3 | VOLATILITY &amp; STATISTICAL POSITION</b>",
-      f"• 10Y 30-observation volatility: {_change(latest.get('US10Y_vol30_bps'))}",
-      f"• Z-score (252 obs., 10Y): <b>{latest.get('US10Y_z252',float('nan')):.2f}</b>",
-      f"• Z-score (252 obs., 2Y): <b>{latest.get('US2Y_z252',float('nan')):.2f}</b>",
-      f"• Z-score (252 obs., 30Y): <b>{latest.get('US30Y_z252',float('nan')):.2f}</b>",
+      f"• 10Y volatility (30 observations): {_change(latest.get('US10Y_vol30_bps'))}",
+      f"• Z-score 2Y: <b>{latest.get('US2Y_z252',float('nan')):.2f}</b> | 10Y: <b>{latest.get('US10Y_z252',float('nan')):.2f}</b> | 30Y: <b>{latest.get('US30Y_z252',float('nan')):.2f}</b>",
       "",
       "<b>4 | MACRO INTELLIGENCE</b>",
       macro_context(metrics),
       "",
-      "<b>5 | OBSERVATIONS &amp; LIMITATIONS</b>",
-      "• Curve and volatility labels are rules-based descriptions of market data.",
-      "• Yield movements alone do not prove macroeconomic causes, policy expectations, term premium, flows or positioning.",
-      "• Z-scores are rolling statistical comparisons, not valuation signals or forecasts.",
-      "",
-      "<i>Source: Federal Reserve / FRED constant-maturity Treasury series. This report is informational, not investment advice.</i>"
+      "<i>Fonte: Federal Reserve / FRED. Análise quantitativa descritiva; não constitui recomendação de investimento.</i>"
     ]
     return "\n".join(lines)
 
