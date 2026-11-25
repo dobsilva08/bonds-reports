@@ -2,8 +2,10 @@
 import argparse, os
 import pandas as pd
 import matplotlib.pyplot as plt
+from scripts.bonds.chart_style import apply_style, finish
 
 def main():
+    apply_style()
     p=argparse.ArgumentParser()
     p.add_argument("--files",nargs=3,required=True)
     p.add_argument("--out",default="pipelines/bonds/curve_comparison.png")
@@ -32,7 +34,7 @@ def main():
         ax.plot(labels,[row[c] for c in cols],marker="o",linewidth=2,label=label)
     ax.set_title("US Treasury Yield Curve | Recent Comparisons")
     ax.set_ylabel("Yield (%)")
-    ax.grid(True,alpha=.25)
+    finish(ax)
     ax.legend()
     ax.text(.99,.02,f"Current observation: {latest['date'].date()}",transform=ax.transAxes,ha="right",va="bottom")
     os.makedirs(os.path.dirname(args.out) or ".",exist_ok=True)
