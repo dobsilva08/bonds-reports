@@ -13,6 +13,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
+from scripts.bonds.chart_style import apply_style, finish
 from math import sqrt
 
 def read_series(path):
@@ -34,6 +35,7 @@ def ensure_out_name(out: str, last12: bool) -> str:
     return out
 
 def main():
+    apply_style()
     p = argparse.ArgumentParser(description="Volatilidade realizada de yields (rolling std dos delta em bps)")
     p.add_argument("--files", nargs="+", required=True, help="CSV(s) de entrada (date,yield_pct,source)")
     p.add_argument("--window", type=int, default=30, help="janela em dias (default 30)")
@@ -91,7 +93,7 @@ def main():
         label = vc.replace("_vol","")
         ax.plot(merged["date"], merged[vc], label=f"Vol {label} (window={args.window}d){' annualized' if args.annualize else ''}")
         ax.set_ylabel("bps" + (" (ann.)" if args.annualize else ""))
-        ax.grid(True)
+        finish(ax)
         ax.legend(loc="upper left")
     axes[-1].set_xlabel("Data")
     out = args.out or f"pipelines/bonds/volatility_{args.window}d.png"
