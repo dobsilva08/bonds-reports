@@ -36,9 +36,9 @@ jobs:
           python scripts/bonds/plot_spreads.py --files $FILES --out pipelines/bonds/smoke_spreads.png
           python scripts/bonds/plot_volatility.py --files $FILES --window 30 --annualize --out pipelines/bonds/smoke_volatility.png
           python scripts/bonds/plot_zscore.py --files $FILES --window 252 --out pipelines/bonds/smoke_zscore.png
-          python scripts/bonds/plot_butterfly.py --files $FILES --out pipelines/bonds/smoke_butterfly.png
+          python scripts/bonds/plot_butterfly.py --files $FILES --out pipelines/bonds/smoke_butterfly.png\n          python scripts/bonds/plot_curve_comparison.py --files $FILES --out pipelines/bonds/smoke_curve_comparison.png
           test -s pipelines/bonds/smoke_yields.png
           test -s pipelines/bonds/smoke_spreads.png
           test -s pipelines/bonds/smoke_volatility.png
           test -s pipelines/bonds/smoke_zscore.png
-          test -s pipelines/bonds/smoke_butterfly.png
+          test -s pipelines/bonds/smoke_butterfly.png\n          test -s pipelines/bonds/smoke_curve_comparison.png
