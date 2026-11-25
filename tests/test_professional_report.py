@@ -16,6 +16,6 @@ class ProfessionalReportTests(unittest.TestCase):
         self.assertIn("US TREASURY",report)
         self.assertIn("MARKET SNAPSHOT",report)
         self.assertIn("MACRO INTELLIGENCE",report)
-        self.assertIn("Curve regime:",context)
-        self.assertIn("causal",context.lower())
+        self.assertIn("LEITURA DO MERCADO",context)
+        self.assertIn("causa específica",context.lower())
 if __name__=="__main__": unittest.main()
