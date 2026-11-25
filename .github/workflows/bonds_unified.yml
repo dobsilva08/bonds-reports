@@ -68,6 +68,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bonds-report-charts
-          path: pipelines/bonds/*.png
+          path: |
+            pipelines/bonds/*.png
+            pipelines/bonds/analytics.csv
+            pipelines/bonds/executive.txt
+            pipelines/bonds/macro_context.txt
           if-no-files-found: error
           retention-days: 7
