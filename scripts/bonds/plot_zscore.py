@@ -11,6 +11,7 @@ import os
 from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
+from scripts.bonds.chart_style import apply_style, finish
 
 def read_series(path):
     df = pd.read_csv(path, parse_dates=["date"])
@@ -26,6 +27,7 @@ def read_series(path):
     return df, name
 
 def main():
+    apply_style()
     p = argparse.ArgumentParser(description="Z-score (rolling) das yields")
     p.add_argument("--files", nargs="+", required=True)
     p.add_argument("--window", type=int, default=252, help="janela para média e std (default 252)")
@@ -79,7 +81,7 @@ def main():
         ax.axhline(2, linestyle="--", linewidth=0.6)
         ax.axhline(-2, linestyle="--", linewidth=0.6)
         ax.set_ylabel("Z")
-        ax.grid(True)
+        finish(ax)
         ax.legend(loc="upper left")
     axes[-1].set_xlabel("Data")
 
