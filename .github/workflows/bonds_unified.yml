@@ -54,36 +54,52 @@ jobs:
           test -s pipelines/bonds/volatility.png
           test -s pipelines/bonds/zscore.png
           test -s pipelines/bonds/butterfly.png
-      - name: Detect Telegram group migration automatically
+      - name: Diagnose Telegram destination and migration
         if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
         run: |
           python - <<'PY'
           import os, requests
           token=os.environ["TELEGRAM_BOT_TOKEN"]
-          url=f"https://api.telegram.org/bot{token}/getUpdates"
-          try:
-              r=requests.get(url,timeout=20)
-              data=r.json()
-              if not data.get("ok"):
-                  print("Telegram getUpdates unavailable; retaining configured chat ID.")
-                  raise SystemExit(0)
+          base=f"https://api.telegram.org/bot{token}"
+          chat=os.environ.get("TELEGRAM_CHAT_ID","").strip()
+          info=requests.get(base+"/getWebhookInfo",timeout=20).json()
+          webhook=(info.get("result") or {}).get("url","")
+          if webhook:
+              print("Bot webhook is active; getUpdates migration detection cannot be used.")
+          else:
+              updates=requests.get(base+"/getUpdates",timeout=20).json()
               migrated=None
-              for update in reversed(data.get("result",[])):
-                  msg=update.get("message") or update.get("edited_message") or update.get("channel_post") or {}
-                  if msg.get("migrate_to_chat_id"):
-                      migrated=str(msg["migrate_to_chat_id"])
-                      break
-                  if msg.get("migrate_from_chat_id") and msg.get("chat",{}).get("type")=="supergroup":
-                      migrated=str(msg["chat"]["id"])
-                      break
+              if updates.get("ok"):
+                  for update in reversed(updates.get("result",[])):
+                      msg=update.get("message") or update.get("edited_message") or update.get("channel_post") or {}
+                      if msg.get("migrate_to_chat_id"):
+                          migrated=str(msg["migrate_to_chat_id"]); break
+                      if msg.get("migrate_from_chat_id") and msg.get("chat",{}).get("type")=="supergroup":
+                          migrated=str(msg["chat"]["id"]); break
               if migrated:
+                  chat=migrated
                   with open(os.environ["GITHUB_ENV"],"a") as f:
-                      f.write("TELEGRAM_CHAT_ID="+migrated+"\\n")
-                  print("Detected Telegram migration update; using migrated destination for this run.")
+                      f.write("TELEGRAM_CHAT_ID="+chat+"\n")
+                  print("Migration event detected; temporary destination updated for this run.")
               else:
-                  print("No migration update found; retaining configured chat ID.")
-          except Exception as e:
-              print("Migration detection unavailable:",type(e).__name__)
+                  print("No migration event available.")
+          if not chat:
+              raise SystemExit("Telegram chat ID missing.")
+          print("Configured Telegram destination present (ID masked).")
+          PY
+      - name: Telegram preflight message
+        if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
+        run: |
+          python - <<'PY'
+          import os,requests
+          token=os.environ["TELEGRAM_BOT_TOKEN"]; chat=os.environ["TELEGRAM_CHAT_ID"]
+          r=requests.post(f"https://api.telegram.org/bot{token}/sendMessage",json={"chat_id":chat,"text":"<b>Bonds Reports</b> — validação de entrega iniciada.","parse_mode":"HTML"},timeout=30)
+          try: body=r.json()
+          except Exception: raise SystemExit(f"Telegram preflight invalid response HTTP {r.status_code}")
+          if not r.ok or not body.get("ok"):
+              detail=body.get("description","API error") if isinstance(body,dict) else "API error"
+              raise SystemExit(f"Telegram preflight failed HTTP {r.status_code}: {detail}")
+          print("Telegram preflight delivery confirmed.")
           PY
       - name: Send charts and executive snapshot
         if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
