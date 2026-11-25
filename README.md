@@ -1,30 +1,39 @@
-# Bonds Reports — US Treasury 2Y / 10Y / 30Y
+# 🇺🇸 US Treasury & Macro Intelligence
+### Daily Fixed Income Market Monitor
 
-Daily data and curve analytics based on FRED constant-maturity series:
-- DGS2 — US 2-Year
-- DGS10 — US 10-Year
-- DGS30 — US 30-Year
+A scheduled, data-first Treasury market monitor built around the US 2Y, 10Y and 30Y constant-maturity yields from Federal Reserve FRED.
 
-## Unified workflow
-The unified workflow is `.github/workflows/bonds_unified.yml`, scheduled for 07:05 BRT (10:05 UTC). It collects, validates, calculates curve metrics, generates charts, and sends charts plus a quantitative executive snapshot to Telegram.
+## Daily coverage
+- **Market Overview:** 2Y, 10Y and 30Y yields and daily changes in basis points.
+- **Curve Structure:** 10Y–2Y, 30Y–10Y, 30Y–2Y and 30Y–10Y–2Y butterfly metric.
+- **Volatility:** rolling realized volatility of daily yield changes.
+- **Statistical Position:** rolling 252-observation Z-scores.
+- **Macro Intelligence:** rules-based curve and movement labels with clear interpretation limits.
+- **Charts:** yield history, spreads, volatility, Z-score, butterfly and curve-comparison visual.
+- **Delivery:** Telegram publication and run artifacts.
 
-Legacy workflows remain available via manual dispatch but have their schedules disabled to prevent duplicate automated deliveries.
+## Pipeline
+1. Collect DGS2, DGS10 and DGS30 from FRED.
+2. Validate dates, numeric values, range and freshness.
+3. Align observations and calculate curve analytics.
+4. Build a structured daily executive report and macro context.
+5. Generate chart pack.
+6. Deliver via Telegram (scheduled run) and store artifacts.
 
-## Validation
-The data engine rejects missing columns, duplicate observations, too few valid observations, implausible yields, future dates, and stale observations (more than 10 calendar days).
+## Analytics
+- Yield changes (bps); rolling 30-observation volatility
+- 10Y–2Y, 30Y–10Y, 30Y–2Y
+- Butterfly: 30Y − 2×10Y + 2Y
+- Rolling 252-observation Z-score
 
-## Metrics
-- 10Y-2Y, 30Y-10Y, 30Y-2Y spreads
-- 30Y-2×10Y+2Y butterfly
-- daily changes (basis points)
-- 30-observation rolling realized volatility
-- 252-observation rolling Z-score
+## Schedule & workflow
+Unified pipeline: `.github/workflows/bonds_unified.yml` (10:05 UTC / 07:05 BRT). Legacy workflows are retained for manual use, with schedules disabled to avoid duplicate sends.
 
-## Macro and AI boundaries
-Macro context describes supplied curve data only and warns that yields alone cannot establish macro causes, news, flows, term premium, or institutional positioning. Shared LLM prompt and report validation are groundwork for a later integration stage; the current unified scheduled workflow delivers a quantitative snapshot, not generated macro commentary.
+## Data & interpretation
+FRED series: DGS2, DGS10, DGS30. Labels are mechanical descriptions of the supplied data and do not infer causality, inflation expectations, term premium, positioning, flows or news.
 
-## Testing
-Run offline tests: `python -m unittest discover -s tests`
+## Tests
+`python -m unittest discover -s tests` and chart smoke checks in GitHub Actions.
 
 ## Secrets
-Scheduled production requires `FRED_API_KEY`, `TELEGRAM_BOT_TOKEN`, and `TELEGRAM_CHAT_ID`. Never print credentials in logs.
+Scheduled production requires `FRED_API_KEY`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. Never log secret values.
