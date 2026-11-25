@@ -11,7 +11,7 @@ def send_message(text, preview=False, marker=None, html_mode=True):
     if html_mode: payload["parse_mode"]="HTML"
     response=requests.post(f"https://api.telegram.org/bot{token}/sendMessage",json=payload,timeout=30)
     if not response.ok:
-        raise RuntimeError(f\"Telegram sendMessage HTTP {response.status_code}: {response.text}\")
+        raise RuntimeError(f"Telegram sendMessage HTTP {response.status_code}: {response.text}")
     body=response.json()
     if not body.get("ok") or not body.get("result"):
         raise RuntimeError(f"Telegram API did not confirm delivery: {body}")
@@ -27,7 +27,7 @@ def send_photo(path, caption="", marker=None):
         response=requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
             data={"chat_id":chat,"caption":caption},files={"photo":photo},timeout=60)
     if not response.ok:
-        raise RuntimeError(f\"Telegram sendPhoto HTTP {response.status_code}: {response.text}\")
+        raise RuntimeError(f"Telegram sendPhoto HTTP {response.status_code}: {response.text}")
     body=response.json()
     if not body.get("ok") or not body.get("result"): raise RuntimeError(f"Telegram API delivery not confirmed: {body}")
     if marker:
