@@ -3,6 +3,12 @@ name: Bonds Unified Pipeline
 on:
   schedule:
     - cron: "5 10 * * *"
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/bonds_unified.yml'
+      - 'scripts/bonds/**'
+      - 'requirements.txt'
   workflow_dispatch:
     inputs:
       preview:
@@ -35,7 +41,7 @@ jobs:
       - name: Validate configuration
         run: |
           test -n "$FRED_API_KEY"
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.preview }}" != "true" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || ( [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.preview }}" != "true" ] ); then
             test -n "$TELEGRAM_BOT_TOKEN"
             test -n "$TELEGRAM_CHAT_ID"
           fi
@@ -57,7 +63,7 @@ jobs:
           test -s pipelines/bonds/butterfly.png
           test -s pipelines/bonds/curve_comparison.png
       - name: Telegram preflight (migration-aware)
-        if: ${{ github.event_name == 'schedule' || inputs.preview != true }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.preview != true) }}
         run: |
           python - <<'PY'
           from scripts.bonds.telegram_delivery import send_message
