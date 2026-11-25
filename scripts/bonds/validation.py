@@ -18,9 +18,9 @@ def validate_frame(df: pd.DataFrame, series: str, min_rows: int = 2) -> pd.DataF
         raise ValueError(f"{series}: insufficient valid observations ({len(out)})")
     if not out["yield_pct"].between(-1, 25).all():
         raise ValueError(f"{series}: yield values outside sanity range")
-    if out["date"].max().date() > pd.Timestamp.utcnow().date():
+    if out["date"].max().date() > pd.Timestamp.utcnow().tz_localize(None).date():
         raise ValueError(f"{series}: future observation detected")
-    age = (pd.Timestamp.utcnow().normalize() - out["date"].max().normalize()).days
+    age = (pd.Timestamp.utcnow().tz_localize(None).normalize() - out["date"].max().normalize()).days
     if age > 10:
         raise ValueError(f"{series}: stale observation ({age} calendar days)")
     return out.reset_index(drop=True)
