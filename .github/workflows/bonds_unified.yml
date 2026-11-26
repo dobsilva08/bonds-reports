@@ -2,7 +2,7 @@ name: Bonds Unified Pipeline
 
 on:
   schedule:
-    - cron: "10 9 * * *" # 06:10 BRT
+    - cron: "27 9 * * *" # 06:27 BRT
   push:
     branches: [main]
     paths:
