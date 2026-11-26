@@ -6,7 +6,6 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/bonds_unified.yml'
       - 'scripts/bonds/**'
       - 'requirements.txt'
   workflow_dispatch:
